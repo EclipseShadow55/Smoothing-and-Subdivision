@@ -13,4 +13,7 @@ class Part:
 class Megalodon:
     class Tooth:
         def __init__(self, position, size, wear, chipping):
-            self.position =
+            self.position = position
+            self.size = size
+            self.wear = wear
+            self.chipping = chipping
