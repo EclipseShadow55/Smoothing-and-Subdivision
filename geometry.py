@@ -141,3 +141,15 @@ class Face:
         if v3.dot(self.p3.to(c)) < 0:
             v3 = -v3
         return v1.dot(self.p1.to(point)) < 0 and v2.dot(self.p2.to(point)) < 0 and v3.dot(self.p3.to(point)) < 0
+
+class Polyhedron:
+    def __init__(self, points, faces):
+        facepoints = []
+        for face in faces:
+            facepoints += face.points()
+        facepoints = set(facepoints)
+        points = set(points)
+        if not facepoints == points:
+            raise ValueError("Face points must match the provided points.")
+        self.points = points
+        self.faces = faces
