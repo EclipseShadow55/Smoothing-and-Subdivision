@@ -6,7 +6,6 @@ class Part:
         self.edges = ()
         self.faces = faces
 
-
     def connect(self, other):
 
 
