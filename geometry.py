@@ -1,8 +1,7 @@
 import numpy as np
 import trimesh
 
-
-class TrimeshGeometry:
+class ExtendedTrimesh:
     @staticmethod
     def edges_in_mesh(mesh: trimesh.Trimesh, edges: np.ndarray) -> np.ndarray:
         """
@@ -28,7 +27,7 @@ class TrimeshGeometry:
         if mesh.is_empty:
             return np.zeros(0, dtype=bool)
 
-        return TrimeshGeometry._edges_in_mesh(mesh, edges)
+        return ExtendedTrimesh._edges_in_mesh(mesh, edges)
 
     @staticmethod
     def _edges_in_mesh(mesh: trimesh.Trimesh, edges: np.ndarray) -> np.ndarray:
@@ -43,7 +42,7 @@ class TrimeshGeometry:
         :rtype: np.ndarray
         """
         sorted_edges = np.sort(edges, axis=1)
-        mesh_edges = np.sort(mesh.edges_unique(), axis=1)
+        mesh_edges = np.sort(mesh.face_adjacency_edges, axis=1)
         # View as structured arrays for row-wise comparison
         dtype = [('v0', sorted_edges.dtype), ('v1', sorted_edges.dtype)]
         sorted_edges_view = sorted_edges.view(dtype)
@@ -54,177 +53,40 @@ class TrimeshGeometry:
         return mask
 
     @staticmethod
-    def get_neighbors(mesh: trimesh.Trimesh, edges) -> np.ndarray:
-        """
-        Get the neighboring faces for each edge in an ndarray of edges. Public method that validates input types and dimensions.
-        Note: This method only works for watertight meshes and when every provided edge is present in the mesh.
-
-        :param mesh: The mesh to analyze.
-        :type mesh: trimesh.Trimesh
-        :param edges: An ndarray of shape (n, 2) of edges or pairs of vertex indices, where n is the number of edges.
-        :type edges: np.ndarray
-        :return: ndarray of shape (n, 2) of face indices, where n is the number of edges
-        :rtype: np.ndarray
-        :raises TypeError: If mesh is not a trimesh.Trimesh object or edges is not a numpy ndarray.
-        :raises ValueError: If edges is not a 2D array with shape (n, 2), if edges is empty, if mesh is empty, if mesh is not watertight, or if some edges are not present in the mesh.
-        """
-        if not isinstance(mesh, trimesh.Trimesh):
-            raise TypeError("Mesh must be a trimesh.Trimesh object.")
-        if not isinstance(edges, np.ndarray):
-            raise TypeError("Edges must be a numpy ndarray.")
-        if not (edges.ndim == 2 and edges.shape[1] == 2):
-            raise ValueError("Edges must be a 2D array with shape (n, 2).")
-        if edges.shape[0] == 0:
-            return np.empty((0, 2), dtype=int)
-        if mesh.is_empty:
-            return np.empty((0, 2), dtype=int)
-        if not mesh.is_watertight:
-            raise ValueError("Mesh must be watertight to compute neighbors.")
-        if not np.all(TrimeshGeometry._edges_in_mesh(mesh, edges)):
-            raise ValueError("Some edges are not present in the mesh.")
-
-        return TrimeshGeometry._get_neighbors(mesh, edges)
-
-    @staticmethod
-    def _get_neighbors(mesh: trimesh.Trimesh, edges: np.ndarray) -> np.ndarray:
-        """
-        Get the neighboring faces for each edge in an ndarray of edges. Private method that performs the actual computation with no input validation.
-        Note: This method only works for watertight meshes and when every provided edge is present in the mesh.
-
-        :param mesh: The mesh to analyze.
-        :type mesh: trimesh.Trimesh
-        :param edges: An ndarray of shape (n, 2) of edges or pairs of vertex indices, where n is the number of edges.
-        :type edges: np.ndarray
-        :return: ndarray of shape (n, 2) of face indices, where n is the number of edges
-        :rtype: np.ndarray
-        """
-        adj_ind_lookup = np.sort(mesh.face_adjacency_edges, axis=1)
-        faces_lookup = mesh.face_adjacency
-        dtype = [('v0', adj_ind_lookup.dtype), ('v1', adj_ind_lookup.dtype)]
-        edges_view = edges.view(dtype)
-        adj_edges_view = adj_ind_lookup.view(dtype)
-        matches = np.isin(edges_view, adj_edges_view)
-        indices = np.argmax(matches, axis=1)
-        neighbors = faces_lookup[indices]
-
-        return neighbors
-
-    @staticmethod
-    def edge_angles(mesh, edges: np.ndarray, neighbors: np.ndarray | None = None) -> np.ndarray:
-        """
-        Calculate the angle of each edge in a mesh. Public method that validates input types and dimensions.
-        Note: This method only works for watertight meshes and when every provided edge is present in the mesh.
-
-        :param mesh: The mesh to analyze.
-        :type mesh: trimesh.Trimesh
-        :param edges: An ndarray of shape (n, 2) of edges or pairs of vertex indices, where n is the number of edges.
-        :type edges: np.ndarray
-        :param neighbors: An ndarray of shape (n, 2) of precomputed neighbors of edges, if available.
-        :type neighbors: np.ndarray, optional
-        :return: ndarray of angles in radians for each edge of shape (n) where n is the number of edges.
-        :rtype: np.ndarray
-        :raises TypeError: If mesh is not a trimesh.Trimesh object or edges is not a numpy ndarray.
-        :raises ValueError: If edges is not a 2D array with shape (n, 2), if edges is empty, if mesh is empty, if mesh is not watertight, or if some edges are not present in the mesh.
-        """
-        if not isinstance(mesh, trimesh.Trimesh):
-            raise TypeError("Mesh must be a trimesh.Trimesh object.")
-        if not isinstance(edges, np.ndarray):
-            raise TypeError("Edges must be a numpy ndarray.")
-        if edges.ndim != 2 or edges.shape[1] != 2:
-            raise ValueError("Edges must be a 2D array with shape (n, 2).")
-        if edges.shape[0] == 0:
-            return np.zeros(0, dtype=float)
-        if mesh.is_empty:
-            return np.zeros(0, dtype=float)
-        if not mesh.is_watertight:
-            raise ValueError("Mesh must be watertight to compute edge angles.")
-        if not np.all(TrimeshGeometry._edges_in_mesh(mesh, edges)):
-            raise ValueError("Some edges are not present in the mesh.")
-        if not isinstance(neighbors, (np.ndarray, type(None))):
-            raise TypeError("Neighbors must be a numpy ndarray or None.")
-        if neighbors is not None and (neighbors.ndim != 2 or neighbors.shape[1] != 2):
-            raise ValueError("Neighbors must be a 2D array with shape (n, 2) or None.")
-
-        return TrimeshGeometry._edge_angles(mesh, edges, neighbors)
-
-    @staticmethod
-    def _edge_angles(mesh: trimesh.Trimesh, edges: np.ndarray, neighbors: np.ndarray | None = None) -> np.ndarray:
-        """
-        Calculate the angle of each edge in a mesh. Public method that validates input types and dimensions.
-        Note: This method only works for watertight meshes and when every provided edge is present in the mesh.
-
-        :param mesh: The mesh to analyze.
-        :type mesh: trimesh.Trimesh
-        :param edges: An ndarray of shape (n, 2) of edges or pairs of vertex indices, where n is the number of edges.
-        :type edges: np.ndarray
-        :param neighbors: An ndarray of shape (n, 2) of precomputed neighbors of edges, if available.
-        :type neighbors: np.ndarray, optional
-        :return: ndarray of angles in radians for each edge of shape (n) where n is the number of edges.
-        :rtype: np.ndarray
-        """
-        if neighbors is None:
-            neighbors = TrimeshGeometry._get_neighbors(mesh, edges)
-        normals1 = mesh.face_normals[neighbors.T[0]]
-        normals2 = mesh.face_normals[neighbors.T[1]]
-        cos = np.dot(normals1, normals2)
-        angles = np.arccos(cos)
-
-        return angles
-
-    @staticmethod
-    def get_edge_normals(mesh: trimesh.Trimesh, edges: np.ndarray, neighbors: np.ndarray | None = None) -> np.ndarray:
+    def get_edge_normals(mesh: trimesh.Trimesh) -> np.ndarray:
         """
         Get the normals for each edge in a mesh. Public method that validates input types and dimensions.
         Note: This method only works for watertight meshes and when every provided edge is present in the mesh.
 
         :param mesh: The mesh to analyze.
         :type mesh: trimesh.Trimesh
-        :param edges: An ndarray of shape (n, 2) of edges or pairs of vertex indices, where n is the number of edges.
-        :type edges: np.ndarray
-        :param neighbors: An ndarray of shape (n, 2) of precomputed neighbors of edges, if available.
-        :type neighbors: np.ndarray, optional
         :return: ndarray of normals for each edge of shape (n, 3) where n is the number of edges.
         :rtype: np.ndarray
-        :raises TypeError: If mesh is not a trimesh.Trimesh object or edges is not a numpy ndarray.
-        :raises ValueError: If edges is not a 2D array with shape (n, 2), if edges is empty, if mesh is empty, if mesh is not watertight, or if some edges are not present in the mesh.
+        :raises TypeError: If mesh is not a trimesh.Trimesh object.
+        :raises ValueError: If mesh is empty, if mesh is not watertight
         """
         if not isinstance(mesh, trimesh.Trimesh):
             raise TypeError("Mesh must be a trimesh.Trimesh object.")
-        if not isinstance(edges, np.ndarray):
-            raise TypeError("Edges must be a numpy ndarray.")
-        if edges.ndim != 2 or edges.shape[1] != 2:
-            raise ValueError("Edges must be a 2D array with shape (n, 2).")
-        if edges.shape[0] == 0:
-            return np.zeros((0, 3), dtype=float)
         if mesh.is_empty:
             return np.zeros((0, 3), dtype=float)
         if not mesh.is_watertight:
             raise ValueError("Mesh must be watertight to compute edge normals.")
-        if not np.all(TrimeshGeometry._edges_in_mesh(mesh, edges)):
-            raise ValueError("Some edges are not present in the mesh.")
-        if not isinstance(neighbors, (np.ndarray, type(None))):
-            raise TypeError("Neighbors must be a numpy ndarray or None.")
 
-        return TrimeshGeometry._get_edge_normals(mesh, edges, neighbors)
+        return ExtendedTrimesh._get_edge_normals(mesh)
 
     @staticmethod
-    def _get_edge_normals(mesh: trimesh.Trimesh, edges: np.ndarray, neighbors: np.ndarray | None = None) -> np.ndarray:
+    def _get_edge_normals(mesh: trimesh.Trimesh) -> np.ndarray:
         """
         Get the normals for each edge in a mesh. Private method that performs the actual computation with no input validation.
         Note: This method only works for watertight meshes and when every provided edge is present in the mesh.
 
         :param mesh: The mesh to analyze.
         :type mesh: trimesh.Trimesh
-        :param edges: An ndarray of shape (n, 2) of edges or pairs of vertex indices, where n is the number of edges.
-        :type edges: np.ndarray
-        :param neighbors: An ndarray of shape (n, 2) of precomputed neighbors of edges, if available.
-        :type neighbors: np.ndarray, optional
         :return: ndarray of normals for each edge of shape (n, 3) where n is the number of edges.
         :rtype: np.ndarray
         """
-        if neighbors is None:
-            neighbors = TrimeshGeometry._get_neighbors(mesh, edges)
-        normals = mesh.face_normals.reshape(-1, 3)
+        neighbors = mesh.face_adjacency
+        normals = mesh.face_normals
         normals = normals[neighbors.T]
         normals1 = normals[0]
         normals2 = normals[1]
@@ -255,7 +117,7 @@ class TrimeshGeometry:
         if edges.ndim != 2 or edges.shape[1] != 2:
             raise ValueError("Edges must be a 2D array with shape (m, 2).")
 
-        return TrimeshGeometry._get_opposite(faces, edges)
+        return ExtendedTrimesh._get_opposite(faces, edges)
 
     @staticmethod
     def _get_opposite(faces: np.ndarray, edges: np.ndarray) -> np.ndarray:
@@ -275,9 +137,8 @@ class TrimeshGeometry:
 
         return opposite
 
-
     @staticmethod
-    def smooth(mesh: trimesh.Trimesh, alpha: float, iterations: int = 1):
+    def sharp_catmull_clark(mesh: trimesh.Trimesh, alpha: float, iterations: int = 1):
         """
         Smooth a mesh in place using intelligent edge and vertex addition.
 
@@ -305,10 +166,11 @@ class TrimeshGeometry:
             return
         if not mesh.is_watertight:
             raise ValueError("Mesh must be watertight to perform smoothing.")
-        TrimeshGeometry._smooth(mesh, alpha, iterations)
+        for _ in range(iterations):
+            ExtendedTrimesh._sharp_catmull_clark(mesh, alpha)
 
     @staticmethod
-    def _smooth(mesh: trimesh.Trimesh, alpha: float, iterations: int = 1):
+    def _sharp_catmull_clark(mesh: trimesh.Trimesh, alpha: float):
         """
         Smooth a mesh in place using intelligent edge and vertex addition. Private method that performs the actual smoothing with no input validation.
 
@@ -316,19 +178,130 @@ class TrimeshGeometry:
         :type mesh: trimesh.Trimesh
         :param alpha: A scaling factor for the amount of change applied to each vertex and edge.
         :type alpha: float
-        :param iterations: Number of smoothing iterations to perform.
-        :type iterations: int
         :return: None. The mesh is modified in place.
         """
-        for _ in range(iterations):
-            edges = mesh.edges()
-            neighbors = TrimeshGeometry._get_neighbors(mesh, edges)
-            angles = TrimeshGeometry._edge_angles(mesh, edges, neighbors)
-            factors = np.abs((np.pi - angles) / np.pi) * alpha
-            edge_normals = TrimeshGeometry._get_edge_normals(mesh, edges, neighbors)
-            ie_normals = -edge_normals
-            midpoints = mesh.vertices[edges].mean(axis=1)
-            opposites1 = TrimeshGeometry._get_opposite(neighbors.T[0], edges)
-            opposites2 = TrimeshGeometry._get_opposite(neighbors.T[1], edges)
-            vectors1 = midpoints - mesh.vertices[opposites1]
-            vectors2 = midpoints - mesh.vertices[opposites2]
+        edges = mesh.face_adjacency_edges
+        neighbors = mesh.face_adjacency
+        angles = mesh.face_adjacency_angles
+        factors = np.abs(np.pi - angles) / np.pi * alpha
+        edge_norms = ExtendedTrimesh._get_edge_normals(mesh)
+        i_edge_norms = -edge_norms
+        #midpoints = mesh.vertices[edges].mean(axis=1)
+        opposites1 = ExtendedTrimesh._get_opposite(mesh.faces[neighbors.T[0]], edges)
+        opposites2 = ExtendedTrimesh._get_opposite(mesh.faces[neighbors.T[1]], edges)
+        face1_edge1s = np.column_stack([edges[:, 0], opposites1])
+        face1_edge2s = np.column_stack([edges[:, 1], opposites1])
+        face2_edge1s = np.column_stack([edges[:, 0], opposites2])
+        face2_edge2s = np.column_stack([edges[:, 1], opposites2])
+        face1_edge1s_mid = mesh.vertices[face1_edge1s].mean(axis=1)
+        face1_edge2s_mid = mesh.vertices[face1_edge2s].mean(axis=1)
+        face2_edge1s_mid = mesh.vertices[face2_edge1s].mean(axis=1)
+        face2_edge2s_mid = mesh.vertices[face2_edge2s].mean(axis=1)
+        face1_edge1_int = mesh.vertices[edges[:, 0]] * (1 - factors)[:, None] + face1_edge1s_mid * factors[:, None]
+        face1_edge2_int = mesh.vertices[edges[:, 1]] * (1 - factors)[:, None] + face1_edge2s_mid * factors[:, None]
+        face2_edge1_int = mesh.vertices[edges[:, 0]] * (1 - factors)[:, None] + face2_edge1s_mid * factors[:, None]
+        face2_edge2_int = mesh.vertices[edges[:, 1]] * (1 - factors)[:, None] + face2_edge2s_mid * factors[:, None]
+        change1_1 = face1_edge1_int - mesh.vertices[edges[:, 0]]
+        change1_2 = face1_edge2_int - mesh.vertices[edges[:, 1]]
+        change2_1 = face2_edge1_int - mesh.vertices[edges[:, 0]]
+        change2_2 = face2_edge2_int - mesh.vertices[edges[:, 1]]
+        dist1 = np.sum(change1_1 * i_edge_norms, axis=1)
+        dist2 = np.sum(change1_2 * i_edge_norms, axis=1)
+        dists = np.min(np.column_stack([dist1, dist2]), axis=1)
+        changes = dists[:, None] * i_edge_norms
+        change1_1 = (np.sum(changes * change1_1, axis=1) / np.sum(change1_1 * change1_1, axis=1))[:, None] * change1_1
+        change1_2 = (np.sum(changes * change1_2, axis=1) / np.sum(change1_2 * change1_2, axis=1))[:, None] * change1_2
+        change2_1 = (np.sum(changes * change2_1, axis=1) / np.sum(change2_1 * change2_1, axis=1))[:, None] * change2_1
+        change2_2 = (np.sum(changes * change2_2, axis=1) / np.sum(change2_2 * change2_2, axis=1))[:, None] * change2_2
+        face1_edge1_int = mesh.vertices[edges[:, 0]] + change1_1
+        face1_edge2_int = mesh.vertices[edges[:, 1]] + change1_2
+        face2_edge1_int = mesh.vertices[edges[:, 0]] + change2_1
+        face2_edge2_int = mesh.vertices[edges[:, 1]] + change2_2
+        norms = mesh.face_normals[neighbors]
+        edge_vecs = mesh.vertices[edges[:, 1]] - mesh.vertices[edges[:, 0]]
+        right = np.cross(edge_norms, edge_vecs)
+        dirs = (np.sign(np.einsum('nij,nj->ni', norms, right)) <= 0)
+        opp_inds = np.zeros(shape=dirs.shape, dtype=int)
+        opp_inds[dirs] = 1
+        opps = np.take_along_axis(np.column_stack([opposites1, opposites2]), opp_inds).T
+        edge1_int1_inds = len(mesh.vertices) + np.arange(len(face1_edge1_int))
+        edge2_int1_inds = edge1_int1_inds + len(face1_edge2_int)
+        edge1_int2_inds = edge2_int1_inds + len(face2_edge1_int)
+        edge2_int2_inds = edge1_int2_inds + len(face2_edge2_int)
+        faces1 = np.column_stack([opps[0], edge1_int1_inds, edge2_int1_inds])
+        faces1p = np.column_stack([edge1_int1_inds, edges[:, 0], edge2_int1_inds])
+        faces1q = np.column_stack([edge2_int1_inds, edges[:, 0], edges[:, 1]])
+        faces2 = np.column_stack([opps[1], edge2_int2_inds, edge1_int2_inds])
+        faces2p = np.column_stack([edge2_int2_inds, edges[:, 1], edge1_int2_inds])
+        faces2q = np.column_stack([edge1_int2_inds, edges[:, 1], edges[:, 0]])
+        new_faces = np.vstack([faces1, faces1p, faces1q, faces2, faces2p, faces2q])
+        new_verts = np.vstack([face1_edge1_int, face1_edge2_int, face2_edge1_int, face2_edge2_int])
+        faces_to_rem = np.unique(neighbors.flatten())
+        mask = np.ones(len(mesh.faces), dtype=bool)
+        edges = mesh.vertices[edges]
+        mask[faces_to_rem] = False
+        mesh.update_faces(mask)
+        mesh.vertices = np.vstack([mesh.vertices, new_verts])
+        mesh.faces = np.vstack([mesh.faces, new_faces])
+        mesh.process()
+        mesh.remove_unreferenced_vertices()
+        ExtendedTrimesh._remove_degen_faces(mesh)
+
+    @staticmethod
+    def remove_degen_faces(mesh: trimesh.Trimesh):
+        """
+        Remove degenerate faces from a mesh by removing faces with zero area. Public method that validates input types and dimensions.
+
+        :param mesh: The mesh to process.
+        :type mesh: trimesh.Trimesh
+        :return: None. The mesh is modified in place.
+        :raises TypeError: If mesh is not a trimesh.Trimesh object.
+        """
+        if not isinstance(mesh, trimesh.Trimesh):
+            raise TypeError("Mesh must be a trimesh.Trimesh object.")
+        if mesh.is_empty:
+            return
+
+        ExtendedTrimesh._remove_degen_faces(mesh)
+
+    @staticmethod
+    def _remove_degen_faces(mesh: trimesh.Trimesh):
+        """
+        Remove degenerate faces from a mesh by removing faces with zero area. Private method that performs the actual removal with no input validation.
+
+        :param mesh: The mesh to process.
+        :type mesh: trimesh.Trimesh
+        :return: None. The mesh is modified in place.
+        """
+        areas = mesh.area_faces
+        mask = areas > 0
+        mesh.update_faces(mask)
+        mesh.remove_unreferenced_vertices()
+
+    @staticmethod
+    def fix_overlapping_faces(mesh):
+        """
+        Fix overlapping faces in a mesh by removing duplicate faces and unreferenced vertices. Public method that validates input types and dimensions.
+
+        :param mesh: The mesh to fix.
+        :type mesh: trimesh.Trimesh
+        :return: None. The mesh is modified in place.
+        :raises TypeError: If mesh is not a trimesh.Trimesh object.
+        """
+        if not isinstance(mesh, trimesh.Trimesh):
+            raise TypeError("Mesh must be a trimesh.Trimesh object.")
+        if mesh.is_empty:
+            return
+
+        ExtendedTrimesh._fix_overlapping_faces(mesh)
+
+    def _fix_overlapping_faces(mesh: trimesh.Trimesh):
+        """
+        Fix overlapping faces in a mesh by removing duplicate faces and unreferenced vertices. Private method that performs the actual fix with no input validation.
+
+        :param mesh: The mesh to fix.
+        :type mesh: trimesh.Trimesh
+        :return: None. The mesh is modified in place.
+        """
+        mesh.update_faces(mesh.unique_faces())
+        mesh.remove_unreferenced_vertices()
