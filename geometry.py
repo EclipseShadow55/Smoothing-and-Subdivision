@@ -138,7 +138,7 @@ class ExtendedTrimesh:
         return opposite
 
     @staticmethod
-    def sharp_catmull_clark(mesh: trimesh.Trimesh, alpha: float, iterations: int = 1):
+    def sharp_tri_catmull_clark(mesh: trimesh.Trimesh, alpha: float, iterations: int = 1):
         """
         Smooth a mesh in place using intelligent edge and vertex addition.
 
@@ -170,7 +170,7 @@ class ExtendedTrimesh:
             ExtendedTrimesh._sharp_catmull_clark(mesh, alpha)
 
     @staticmethod
-    def _sharp_catmull_clark(mesh: trimesh.Trimesh, alpha: float, change_tol=1e-6):
+    def _sharp_tri_catmull_clark(mesh: trimesh.Trimesh, alpha: float, change_tol=1e-6):
         """
         Smooth a mesh in place using intelligent edge and vertex addition. Private method that performs the actual smoothing with no input validation.
 
@@ -182,14 +182,15 @@ class ExtendedTrimesh:
         :type change_tol: float
         :return: None. The mesh is modified in place.
         """
-        #Get base values
+        # Get base values
         edges = mesh.face_adjacency_edges
         neighbors = mesh.face_adjacency
         angles = mesh.face_adjacency_angles
         factors = np.abs(np.pi - angles) / np.pi * alpha
         edge_norms = ExtendedTrimesh._get_edge_normals(mesh)
         i_edge_norms = -edge_norms
-        #Calculate intermediate values
+
+        # Calculate intermediate values
         opposites1 = ExtendedTrimesh._get_opposite(mesh.faces[neighbors.T[0]], edges)
         opposites2 = ExtendedTrimesh._get_opposite(mesh.faces[neighbors.T[1]], edges)
         face1_edge1s = np.column_stack([edges[:, 0], opposites1])
@@ -212,7 +213,8 @@ class ExtendedTrimesh:
         dist2 = np.sum(change1_2 * i_edge_norms, axis=1)
         dists = np.min(np.column_stack([dist1, dist2]), axis=1)
         changes = dists[:, None] * i_edge_norms
-        #Filter out edges with small changes
+
+        # Filter out edges with small changes
         change_mask = np.linalg.norm(changes, axis=1) > change_tol
         changes = changes[change_mask]
         change1_1 = change1_1[change_mask]
@@ -223,7 +225,9 @@ class ExtendedTrimesh:
         opposites1 = opposites1[change_mask]
         opposites2 = opposites2[change_mask]
         neighbors = neighbors[change_mask]
-        #Calculate final changes
+        edge_norms = edge_norms[change_mask]
+
+        # Calculate final changes
         change1_1 = (np.sum(changes * change1_1, axis=1) / np.sum(change1_1 * change1_1, axis=1))[:, None] * change1_1
         change1_2 = (np.sum(changes * change1_2, axis=1) / np.sum(change1_2 * change1_2, axis=1))[:, None] * change1_2
         change2_1 = (np.sum(changes * change2_1, axis=1) / np.sum(change2_1 * change2_1, axis=1))[:, None] * change2_1
@@ -232,7 +236,8 @@ class ExtendedTrimesh:
         face1_edge2_int = mesh.vertices[edges[:, 1]] + change1_2
         face2_edge1_int = mesh.vertices[edges[:, 0]] + change2_1
         face2_edge2_int = mesh.vertices[edges[:, 1]] + change2_2
-        #Get face direction (for winding)
+
+        # Get face direction (for winding)
         norms = mesh.face_normals[neighbors]
         edge_vecs = mesh.vertices[edges[:, 1]] - mesh.vertices[edges[:, 0]]
         right = np.cross(edge_norms, edge_vecs)
@@ -240,7 +245,8 @@ class ExtendedTrimesh:
         opp_inds = np.zeros(shape=dirs.shape, dtype=int)
         opp_inds[dirs] = 1
         opps = np.take_along_axis(np.column_stack([opposites1, opposites2]), opp_inds).T
-        #Create new faces and vertices
+
+        # Create new faces and vertices
         edge1_int1_inds = len(mesh.vertices) + np.arange(len(face1_edge1_int))
         edge2_int1_inds = edge1_int1_inds + len(face1_edge2_int)
         edge1_int2_inds = edge2_int1_inds + len(face2_edge1_int)
@@ -253,7 +259,8 @@ class ExtendedTrimesh:
         faces2q = np.column_stack([edge1_int2_inds, edges[:, 1], edges[:, 0]])
         new_faces = np.vstack([faces1, faces1p, faces1q, faces2, faces2p, faces2q])
         new_verts = np.vstack([face1_edge1_int, face1_edge2_int, face2_edge1_int, face2_edge2_int])
-        #Update the mesh
+
+        # Update the mesh
         faces_to_rem = np.unique(neighbors.flatten())
         mask = np.ones(len(mesh.faces), dtype=bool)
         edges = mesh.vertices[edges]
@@ -263,16 +270,19 @@ class ExtendedTrimesh:
         mesh.faces = np.vstack([mesh.faces, new_faces])
         mesh._cache.clear()
         mesh.process(validate=True)
+
+        # Clean up the mesh
         mesh.remove_unreferenced_vertices()
         ExtendedTrimesh._remove_degen_faces(mesh)
         ExtendedTrimesh._fix_overlapping_faces(mesh)
+
+        # Update edges with new vertex indices
         edges_flat = edges.reshape(-1, 3)
         vertices = mesh.vertices
         matches = np.all(edges_flat[:, None, :] == vertices[None, :, :], axis=2)
         inds = np.argmax(matches, axis=1)
         edges = inds.reshape(edges.shape[:2])
-        print(edges)
-        print(changes)
+        # 2 TODO: Implement algorthm to shift old edges towards new edges to lower curvature
 
     @staticmethod
     def remove_degen_faces(mesh: trimesh.Trimesh):
@@ -324,6 +334,7 @@ class ExtendedTrimesh:
 
         ExtendedTrimesh._fix_overlapping_faces(mesh)
 
+    @staticmethod
     def _fix_overlapping_faces(mesh: trimesh.Trimesh):
         """
         Fix overlapping faces in a mesh by removing duplicate faces and unreferenced vertices. Private method that performs the actual fix with no input validation.
@@ -334,3 +345,4 @@ class ExtendedTrimesh:
         """
         mesh.update_faces(mesh.unique_faces())
         mesh.remove_unreferenced_vertices()
+        # 1 TODO: Implement algorithm to fix partially overlapping faces
