@@ -160,7 +160,7 @@ def debug_edge_changes():
     plotter.show()
 
 def debug_vertex_changes():
-    mesh = pv.read(dir + "/debug_save/init_trimesh_model.obj")
+    mesh = pv.read(dir + "/debug_save/middle_trimesh_model.obj")
     loaded = np.load(dir + "/debug_save/debug_vertex_changes.npz", allow_pickle=True)
     vertices = loaded['vertices']
     edges = loaded['edges']
@@ -168,18 +168,24 @@ def debug_vertex_changes():
     edge_moves = loaded['edge_moves']
     edge_changes = loaded['edge_changes']
     norms = loaded['norms']
+    new_verts = loaded['new_verts']
+    new_mesh = pv.PolyData.from_regular_faces(new_verts, mesh.regular_faces)
     for i in range(edges.shape[0]):
         plotter = pv.Plotter()
-        plotter.add_mesh(mesh, style="wireframe", line_width=2, edge_color='black')
+        plotter.add_mesh(mesh, style="wireframe", line_width=2, edge_color='orange')
+        plotter.add_mesh(new_mesh, color='red', show_edges=True, edge_color='black')
         plotter.add_points(pv.PolyData(vertices[i]), color='red', point_size=5)
         plotter.add_points(pv.PolyData(edges[i]), color='green', point_size=10)
         plotter.add_arrows(vertices[i], changes[i], color="black", mag=1)
         plotter.add_arrows(edges[i], edge_changes[i], color="orange")
         plotter.add_arrows(edges[i], edge_moves[i], color="blue", mag=1)
+
+        """
         for j in range(vertices[i].shape[0]):
             plotter.add_arrows(vertices[i][j], norms[i], color="purple")
         for j in range(edges[i].shape[0]):
             plotter.add_arrows(edges[i][j], norms[i], color="purple")
+        """
         plotter.view_isometric()
         plotter.show()
 

@@ -397,7 +397,7 @@ class ExtendedTrimesh:
         mesh.process()
 
     @staticmethod
-    def edge_erosion_smoothing(mesh: trimesh.Trimesh, alpha: float, beta: float, iterations: int = 1, proximity_digits: int = 6, interp: Callable | None = None):
+    def edge_erosion_subdivision(mesh: trimesh.Trimesh, alpha: float, beta: float, iterations: int = 1, proximity_digits: int = 6, interp: Callable | None = None):
         """
         Smooth a mesh in place using intelligent edge and vertex addition.
 
@@ -441,10 +441,10 @@ class ExtendedTrimesh:
             raise ValueError("Mesh must be watertight to perform smoothing.")
 
         for _ in range(iterations):
-            ExtendedTrimesh._edge_erosion_smoothing(mesh, alpha, beta, proximity_digits, interp)
+            ExtendedTrimesh._edge_erosion_subdivision(mesh, alpha, beta, proximity_digits, interp)
 
     @staticmethod
-    def _edge_erosion_smoothing(mesh: trimesh.Trimesh, alpha: float, beta: float, proximity_digits: int = 6, interp: Callable | None = None):
+    def _edge_erosion_subdivision(mesh: trimesh.Trimesh, alpha: float, beta: float, proximity_digits: int = 6, interp: Callable | None = None):
         """
         Smooth a mesh in place using intelligent edge and vertex addition. Private method that performs the actual smoothing with no input validation.
 
@@ -572,7 +572,7 @@ class ExtendedTrimesh:
         new_triangles = ExtendedTrimesh._triangulate_polygons(polygons, flatten=True)
 
         # Add new faces to the mesh and process it
-        mesh.vertices = new_vertices
+        mesh.vertices = new_vertices.copy()
         mesh.faces = new_triangles
 
         temp_mesh = mesh.copy()
@@ -618,6 +618,7 @@ class ExtendedTrimesh:
         # Calculate vertex changes
         dist_from_start = np.sort(dist_from_start, axis=1)
         vert_vec_set = np.repeat(np.stack([vert_moves_temp[edges[:, 0]], vert_moves_temp[edges[:, 1]]], axis=1)[:, None, :, :], 4, axis=1)
+        vert_vec_norm_set = np.linalg.norm(vert_vec_set, axis=3)
         edge_dists = np.linalg.norm(mesh.vertices[edges[:, 1]] - mesh.vertices[edges[:, 0]], axis=1)
         vert_weight1 = np.where((edge_dists[:, None] - dist_from_start) != 0, np.where(dist_from_start != 0, 1 / dist_from_start, 1), 0)
         vert_weight2 = np.where((edge_dists[:, None] - dist_from_start) != 0, np.where(dist_from_start != 0, 1 / (edge_dists[:, None] - dist_from_start), 0), 1)
@@ -625,8 +626,8 @@ class ExtendedTrimesh:
         vert_vecs_unit = np.average(vert_vec_set, weights=np.repeat(vert_weights[:, :, :, None], 3, axis=3), axis=2)
         vert_vecs_unit_norm = np.linalg.norm(vert_vecs_unit, axis=2)
         vert_vecs_unit /= np.where(vert_vecs_unit_norm != 0, vert_vecs_unit_norm, 1)[:, :, None]
-        vert_i_edge_dot = np.vecdot(vert_vecs_unit, i_edge_norms[:, None, :], axis=2)
-        vert_vecs = vert_vecs_unit * (edge_factor[:, None] / np.where(vert_i_edge_dot != 0, vert_i_edge_dot, 1))[:, :, None]
+        vert_vec_norms = np.average(vert_vec_norm_set, weights=vert_weights, axis=2)
+        vert_vecs = vert_vecs_unit * vert_vec_norms[:, :, None]
         #"""
 
         """ Method 2 (Inverted Edge Vectors)
@@ -659,9 +660,10 @@ class ExtendedTrimesh:
 
         # Apply changes
         vert_moves /= np.where(vert_adds != 0, vert_adds, 1)[:, None]
-        np.savez_compressed("debug/debug_save/debug_vertex_changes", vertices=mesh.vertices[verts_by_edge], edges=mesh.vertices[edges], edge_changes=np.stack([e1_vec, e2_vec], axis=1), changes=vert_vecs, edge_moves=vert_moves[edges], norms=i_edge_norms)
         mesh.vertices += vert_moves
-
+        np.savez_compressed("debug/debug_save/debug_vertex_changes", vertices=new_vertices[verts_by_edge],
+                            edges=new_vertices[edges], edge_changes=np.stack([e1_vec, e2_vec], axis=1),
+                            changes=vert_vecs, edge_moves=vert_moves[edges], norms=i_edge_norms, new_verts=mesh.vertices)
         # Cleanup
         mesh.process()
         mesh._cache.clear()
@@ -894,8 +896,8 @@ if __name__ == "__main__":
     mesh = trimesh.load_mesh(f"meshes/{thing}/{thing}.obj")
     #mesh = ExtendedTrimesh.simple_subdivide(mesh, alpha=0.5, beta=0.5, iterations=5)
     #mesh.export(f"meshes/{thing}/{thing}_simple.obj")
-    ExtendedTrimesh.edge_erosion_smoothing(mesh, alpha=0.9, beta=0.5, iterations=1, proximity_digits=6)
-    mesh.export(f"meshes/{thing}/{thing}_catmull_clark.obj")
+    ExtendedTrimesh.edge_erosion_subdivision(mesh, alpha=0.9, beta=0.5, iterations=1, proximity_digits=6)
+    mesh.export(f"meshes/{thing}/{thing}_edge_erosion.obj")
     #mesh = ExtendedTrimesh.simple_smooth(mesh, alpha=0.3, iterations=5, dist_effect="stronger")
     #mesh.export(f"meshes/{thing}/{thing}_simple_smooth.obj")
     print(mesh.is_winding_consistent)
