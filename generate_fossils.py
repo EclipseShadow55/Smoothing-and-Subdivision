@@ -7,7 +7,7 @@ class Part:
         self.faces = faces
 
     def connect(self, other):
-
+        pass
 
 class Megalodon:
     class Tooth:

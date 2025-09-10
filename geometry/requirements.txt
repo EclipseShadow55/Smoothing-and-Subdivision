@@ -1,0 +1,10 @@
+coloraide==5.1
+colorama==0.4.6
+numba==0.61.2
+numpy==2.3.3
+param==2.2.1
+Pygments==2.19.2
+pyvista==0.46.1
+scipy==1.16.1
+trimesh==4.7.1
+vedo==2025.5.4
