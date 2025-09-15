@@ -663,7 +663,8 @@ class ExtendedTrimesh:
         mesh.vertices += vert_moves
         np.savez_compressed("debug/debug_save/debug_vertex_changes", vertices=new_vertices[verts_by_edge],
                             edges=new_vertices[edges], edge_changes=np.stack([e1_vec, e2_vec], axis=1),
-                            changes=vert_vecs, edge_moves=vert_moves[edges], norms=i_edge_norms, new_verts=mesh.vertices)
+                            changes=vert_vecs, edge_moves=vert_moves[edges], norms=i_edge_norms, new_verts=mesh.vertices, polygons=polygons)
+
         # Cleanup
         mesh.process()
         mesh._cache.clear()

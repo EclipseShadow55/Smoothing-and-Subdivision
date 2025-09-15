@@ -2,6 +2,8 @@ import numpy as np
 import os
 import pyvista as pv
 from coloraide import Color
+import networkx as nx
+from pyvista import PolyData
 
 dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -54,21 +56,36 @@ def debug_point_dirs():
         plotter.view_isometric()
         plotter.show()
 
-def debug_polygons():
-    mesh = pv.read(dir + "/debug_save/init_trimesh_model.obj")
-    loaded = np.load(dir + "/debug_save/debug_polygons.npz")
+def debug_polygon_faces():
+    mesh = pv.read(dir + "/debug_save/final_polymesh.obj")
+    faces = mesh.regular_faces
+    verts = mesh.points
+
+    for i in range(len(faces)):
+        new_mesh = pv.PolyData.from_regular_faces(verts, faces[i][None, :])
+        plotter = pv.Plotter()
+        plotter.add_mesh(mesh, color='red', opacity=0.2, show_edges=True)
+        plotter.add_mesh(new_mesh, color='blue', opacity=0.5, show_edges=True)
+        plotter.view_isometric()
+        plotter.show()
+
+def debug_polygon_dirs():
+    mesh = pv.read(dir + "/debug_save/final_polymesh.obj")
+    loaded = np.load(dir + "/debug_save/debug_vertex_changes.npz", allow_pickle=True)
     polygons = loaded['polygons']
-    vertices = loaded['vertices']
+    vertices = loaded['new_verts']
     color_set = Color.interpolate(["#FF0000", "#FF9000", "#FFF200", "#00FF08", "#00D0FF", "#000DFF", "#7B00FF", "#FF00D9"], space="srgb", method="natural")
-    plotter = pv.Plotter()
-    plotter.add_mesh(mesh, color='lightblue', show_edges=True, edge_color='black')
+
     for i in range(polygons.shape[0]):
+        plotter = pv.Plotter()
+        plotter.add_mesh(mesh, color='red', opacity=0.2, show_edges=True)
         poly_verts = vertices[polygons[i]]
-        poly = pv.PolyData(poly_verts)
-        color = color_set(i / polygons.shape[0]).to_string(hex=True, upper=True)
-        plotter.add_points(poly, color=color, point_size=10, name=f'Polygon {i}')
-    plotter.view_isometric()
-    plotter.show()
+        for j in range(polygons.shape[1]):
+            color = color_set(j / polygons.shape[1]).to_string(hex=True, upper=True)
+            plotter.add_points(PolyData(poly_verts[j]), color=color, point_size=10, name=f'Polygon {i}')
+            plotter.add_arrows(poly_verts[j], np.roll(poly_verts, 1, axis=0)[j] - poly_verts[j], color=color)
+        plotter.view_isometric()
+        plotter.show()
 
 def debug_triangles():
     mesh = pv.read(dir + "/debug_save/init_trimesh_model.obj")
@@ -160,7 +177,7 @@ def debug_edge_changes():
     plotter.show()
 
 def debug_vertex_changes():
-    mesh = pv.read(dir + "/debug_save/middle_trimesh_model.obj")
+    mesh = pv.read(dir + "/debug_save/init_trimesh_model.obj")
     loaded = np.load(dir + "/debug_save/debug_vertex_changes.npz", allow_pickle=True)
     vertices = loaded['vertices']
     edges = loaded['edges']
@@ -169,23 +186,56 @@ def debug_vertex_changes():
     edge_changes = loaded['edge_changes']
     norms = loaded['norms']
     new_verts = loaded['new_verts']
-    new_mesh = pv.PolyData.from_regular_faces(new_verts, mesh.regular_faces)
+    polygons = loaded['polygons']
+    new_mesh = pv.PolyData.from_regular_faces(new_verts, polygons)
+    new_mesh.save(dir + "/debug_save/final_polymesh.obj")
     for i in range(edges.shape[0]):
         plotter = pv.Plotter()
-        plotter.add_mesh(mesh, style="wireframe", line_width=2, edge_color='orange')
-        plotter.add_mesh(new_mesh, color='red', show_edges=True, edge_color='black')
+        plotter.add_mesh(mesh, style="wireframe", line_width=2, color='orange')
+        plotter.add_mesh(new_mesh, color='red', opacity=0.5, show_edges=True, edge_color='black', line_width=5)
         plotter.add_points(pv.PolyData(vertices[i]), color='red', point_size=5)
         plotter.add_points(pv.PolyData(edges[i]), color='green', point_size=10)
         plotter.add_arrows(vertices[i], changes[i], color="black", mag=1)
         plotter.add_arrows(edges[i], edge_changes[i], color="orange")
         plotter.add_arrows(edges[i], edge_moves[i], color="blue", mag=1)
-
+        plotter.add_points(new_verts, color='purple', point_size=5)
         """
         for j in range(vertices[i].shape[0]):
             plotter.add_arrows(vertices[i][j], norms[i], color="purple")
         for j in range(edges[i].shape[0]):
             plotter.add_arrows(edges[i][j], norms[i], color="purple")
         """
+        plotter.view_isometric()
+        plotter.show()
+
+def debug_neighbors():
+    important = [1, 2, 3, 4, 5]
+    mesh = pv.read(dir + "/debug_save/final_polymesh.obj")
+    vertices = mesh.points
+    dtype = np.dtype([('x', vertices.dtype), ('y', vertices.dtype), ('z', vertices.dtype)])
+    verts_view = vertices.view(dtype)
+
+    edge_set = mesh.extract_all_edges()
+    edge_vertices = edge_set.points.astype(vertices.dtype)
+    edge_verts_view = edge_vertices.view(dtype)
+
+    line_set = np.array(edge_set.lines)
+    line_inds = np.arange(len(line_set))
+    lines_arr = line_set[line_inds % 3 != 0]
+    lines = np.array(np.split(lines_arr, len(lines_arr) / 2))
+    unique_lines = np.unique(np.sort(lines[lines.T[0] != lines.T[1]], axis=1), axis=0)
+    graph = nx.Graph()
+    graph.add_edges_from(unique_lines)
+    for i in important:
+        point = verts_view[i]
+        point_ind = np.where(np.isclose(edge_verts_view['x'], point['x']) & np.isclose(edge_verts_view['y'], point['y']) & np.isclose(edge_verts_view['z'], point['z']))[0][0]
+        neighbors = list(graph.neighbors(point_ind))
+        points = edge_vertices[neighbors]
+        plotter = pv.Plotter()
+        plotter.add_mesh(mesh, color='red', opacity=0.3)
+        plotter.add_points(pv.PolyData(points), color='green', point_size=10)
+        plotter.add_points(pv.PolyData(vertices[i]), color='blue', point_size=10)
+        plotter.add_points(pv.PolyData(mesh.points), color='red', point_size=5)
         plotter.view_isometric()
         plotter.show()
 
@@ -218,4 +268,4 @@ def debug_change_calc():
 """
 
 if __name__ == "__main__":
-    debug_vertex_changes()
+    debug_polygon_faces()
