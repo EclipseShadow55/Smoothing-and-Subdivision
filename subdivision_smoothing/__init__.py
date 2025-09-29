@@ -47,7 +47,7 @@ To smooth a mesh using intelligent vertex addition:
 >>> SubdivisionSmoothing.edge_erosion_subdivision(mesh, alpha=0.5, beta=0.5)
 """
 
-from .geometry import SubdivisionSmoothing
+from subdivision_smoothing1.src.subdivision_smoothing.geometry import SubdivisionSmoothing
 
 __all__ = ["SubdivisionSmoothing"]
 

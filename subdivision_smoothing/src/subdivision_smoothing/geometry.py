@@ -510,7 +510,7 @@ class SubdivisionSmoothing:
             interp = InterpolatedUnivariateSpline(spline_set.T[0], spline_set.T[1], bbox=[-np.pi, 2 * np.pi], w=w, ext=1)
 
         if test:
-            mesh.export("debug/debug_save/init_trimesh_model.obj")  # Debugging output
+            mesh.export("../../debug/debug_save/init_trimesh_model.obj")  # Debugging output
         edges = mesh.face_adjacency_edges
         neighbors = mesh.face_adjacency
         angles = SubdivisionSmoothing._get_signed_angles(mesh)
@@ -522,14 +522,14 @@ class SubdivisionSmoothing:
         opposites1 = SubdivisionSmoothing._get_opposite(mesh.faces[neighbors.T[0]], edges)
         opposites2 = SubdivisionSmoothing._get_opposite(mesh.faces[neighbors.T[1]], edges)
         if test:
-            np.savez_compressed("debug/debug_save/debug_opposites", edges=mesh.vertices[edges], opposites=mesh.vertices[np.column_stack((opposites1, opposites2))])  # Debugging output
+            np.savez_compressed("../../debug/debug_save/debug_opposites", edges=mesh.vertices[edges], opposites=mesh.vertices[np.column_stack((opposites1, opposites2))])  # Debugging output
         face1_edge1_int = mesh.vertices[edges[:, 0]] * (1 - new_factors)[:, None] + mesh.vertices[opposites1] * new_factors[:, None]
         face1_edge2_int = mesh.vertices[edges[:, 1]] * (1 - new_factors)[:, None] + mesh.vertices[opposites1] * new_factors[:, None]
         face2_edge1_int = mesh.vertices[edges[:, 0]] * (1 - new_factors)[:, None] + mesh.vertices[opposites2] * new_factors[:, None]
         face2_edge2_int = mesh.vertices[edges[:, 1]] * (1 - new_factors)[:, None] + mesh.vertices[opposites2] * new_factors[:, None]
 
         if test:
-            np.savez_compressed("debug/debug_save/debug_init_intersections", init_points=mesh.vertices[edges], intersections=np.stack([face1_edge1_int, face1_edge2_int, face2_edge1_int, face2_edge2_int], axis=1))  # Debugging output
+            np.savez_compressed("../../debug/debug_save/debug_init_intersections", init_points=mesh.vertices[edges], intersections=np.stack([face1_edge1_int, face1_edge2_int, face2_edge1_int, face2_edge2_int], axis=1))  # Debugging output
 
         face1_change1 = face1_edge1_int - mesh.vertices[edges[:, 0]]
         face1_change2 = face1_edge2_int - mesh.vertices[edges[:, 1]]
@@ -570,7 +570,7 @@ class SubdivisionSmoothing:
                                           mesh.vertices[edges[:, 1]],
                                           mesh.vertices[edges[:, 0]],
                                           mesh.vertices[edges[:, 1]]], axis=1)
-            np.savez_compressed("debug/debug_save/debug_changes", init_points=old_verts[edges], final_points=new_vertices_debug, arrow_dirs=arrow_dirs, arrow_starts=arrow_starts) # Debugging output
+            np.savez_compressed("../../debug/debug_save/debug_changes", init_points=old_verts[edges], final_points=new_vertices_debug, arrow_dirs=arrow_dirs, arrow_starts=arrow_starts) # Debugging output
 
         new_vert_inds = np.arange(old_verts.shape[0], old_verts.shape[0] + new_vertices.shape[0])
         edges = np.sort(mesh.face_adjacency_edges, axis=1)
@@ -592,7 +592,7 @@ class SubdivisionSmoothing:
         verts_by_edge = np.array(np.split(sorted_verts, group_starts[1:]))
 
         if test:
-            np.savez_compressed("debug/debug_save/debug_point_sorting",
+            np.savez_compressed("../../debug/debug_save/debug_point_sorting",
                                 verts_by_edge=new_vertices[verts_by_edge])  # Debugging output
 
         dist_from_start = np.linalg.norm(new_vertices[verts_by_edge] - new_vertices[edges[:, 0]][:, None, :], axis=2)
@@ -601,14 +601,14 @@ class SubdivisionSmoothing:
         verts_by_edge = np.take_along_axis(verts_by_edge, order, axis=1)
 
         if test:
-            np.savez_compressed("debug/debug_save/debug_point_dirs", verts_by_edge=new_vertices[verts_by_edge],
+            np.savez_compressed("../../debug/debug_save/debug_point_dirs", verts_by_edge=new_vertices[verts_by_edge],
                                 starts=new_vertices[edges[:, 0]], edge_dirs=edge_dirs)  # Debugging output
 
         polygons = SubdivisionSmoothing._add_verts_to_edge(mesh, edges, verts_by_edge)
 
         if test:
-            np.savez_compressed("debug/debug_save/debug_polygons", vertices=new_vertices, polygons=polygons) # Debugging output
-            np.savez_compressed("debug/debug_save/debug_triangles", vertices=new_vertices, triangles=SubdivisionSmoothing._triangulate_polygons(polygons, flatten=False)) # Debugging output
+            np.savez_compressed("../../debug/debug_save/debug_polygons", vertices=new_vertices, polygons=polygons) # Debugging output
+            np.savez_compressed("../../debug/debug_save/debug_triangles", vertices=new_vertices, triangles=SubdivisionSmoothing._triangulate_polygons(polygons, flatten=False)) # Debugging output
 
         new_triangles = SubdivisionSmoothing._triangulate_polygons(polygons, flatten=True)
 
@@ -742,7 +742,7 @@ class SubdivisionSmoothing:
         mesh.process()
 
         if test:
-            mesh.export("debug/debug_save/final_trimesh_model.obj")  # Debugging output
+            mesh.export("../../debug/debug_save/final_trimesh_model.obj")  # Debugging output
         return edge_set
 
     @staticmethod
@@ -1060,11 +1060,11 @@ if __name__ == "__main__":
     # Example usage
     thing = "inward_pyramid"
     np.set_printoptions(threshold=sys.maxsize)
-    mesh = trimesh.load_mesh(f"meshes/{thing}/{thing}.obj")
+    mesh = trimesh.load_mesh(f"../../meshes/{thing}/{thing}.obj")
     simple_sub_mesh = ExtendedTrimesh.simple_subdivide(mesh, alpha=0.5, beta=0.5, iterations=5)
-    simple_sub_mesh.export(f"meshes/{thing}/{thing}_simple.obj")
+    simple_sub_mesh.export(f"../../meshes/{thing}/{thing}_simple.obj")
     simple_smooth_mesh = ExtendedTrimesh.simple_smooth(mesh, alpha=0.3, iterations=5, dist_effect="stronger")
-    simple_smooth_mesh.export(f"meshes/{thing}/{thing}_simple_smooth.obj")
+    simple_smooth_mesh.export(f"../../meshes/{thing}/{thing}_simple_smooth.obj")
     SubdivisionSmoothing.edge_erosion_subdivision(mesh, alpha=0.9, beta=0.5, iterations=2, proximity_digits=6)
-    mesh.export(f"meshes/{thing}/{thing}_edge_erosion3.obj")
-    np.savez_compressed(f"debug/debug_save/broken_faces.npz", broken_faces=trimesh.repair.broken_faces(mesh), edge_face_ownership=mesh.edges_face, edges=mesh.edges, vertices=mesh.vertices, neighborhood=mesh.face_neighborhood, faces=mesh.faces)
+    mesh.export(f"../../meshes/{thing}/{thing}_edge_erosion3.obj")
+    np.savez_compressed(f"../../debug/debug_save/broken_faces.npz", broken_faces=trimesh.repair.broken_faces(mesh), edge_face_ownership=mesh.edges_face, edges=mesh.edges, vertices=mesh.vertices, neighborhood=mesh.face_neighborhood, faces=mesh.faces)
