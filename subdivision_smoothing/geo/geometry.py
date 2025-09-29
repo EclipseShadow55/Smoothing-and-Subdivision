@@ -1,17 +1,31 @@
+"""
+Provides subdivision and smoothing algorithms for 3D meshes using the trimesh library.
+
+This module offers a collection of static methods for manipulating 3D meshes.
+The main methods handle common subdivision and smoothing tasks, while other public methods are intended for advanced or internal use.
+
+Main Provided Methods
+---------------------
+- :func:`SubdivisionSmoothing.simple_subdivide`: Performs a basic subdivision.
+- :func:`SubdivisionSmoothing.simple_smooth`: Applies a modified Laplacian smoothing algorithm.
+- :func:`SubdivisionSmoothing.edge_erosion_subdivision`: Performs a specialized subdivision with edge erosion.
+
+.. note::
+   Some public methods are primarily intended for internal use and may have less stable APIs and minimal documentation.
+"""
+
 import sys
-from typing import Literal
+from typing import Literal, Callable
 
 import numpy as np
 import trimesh
-from colorama import Fore
 import numba
-from numba import njit, prange
-from param import Callable
-from pygments.lexer import combined
+from numba import njit, jit
+from numba.typed import List as NumbaList
 from scipy.interpolate import InterpolatedUnivariateSpline
 
 
-class ExtendedTrimesh:
+class SubdivisionSmoothing:
     def __init__(self):
         raise NotImplementedError("This class is not meant to be instantiated directly.")
 
@@ -40,7 +54,7 @@ class ExtendedTrimesh:
         if mesh.is_empty:
             return np.zeros(0, dtype=bool)
 
-        return ExtendedTrimesh._edges_in_mesh(mesh, edges)
+        return SubdivisionSmoothing._edges_in_mesh(mesh, edges)
 
     @staticmethod
     def _edges_in_mesh(mesh: trimesh.Trimesh, edges: np.ndarray):
@@ -88,7 +102,7 @@ class ExtendedTrimesh:
         if arr2.ndim != 2:
             raise ValueError("arr2 must be a 2D array.")
 
-        return ExtendedTrimesh._get_row_inds(arr1, arr2)
+        return SubdivisionSmoothing._get_row_inds(arr1, arr2)
 
     @staticmethod
     def _get_row_inds(arr1: np.ndarray, arr2: np.ndarray):
@@ -125,7 +139,8 @@ class ExtendedTrimesh:
     def get_edge_normals(mesh: trimesh.Trimesh):
         """
         Get the normals for each edge in a mesh. Public method that validates input types and dimensions.
-        Note: This method only works for watertight meshes and when every provided edge is present in the mesh.
+        .. note::
+            This method only works for watertight meshes and when every provided edge is present in the mesh.
 
         :param mesh: The mesh to analyze.
         :type mesh: trimesh.Trimesh
@@ -141,13 +156,14 @@ class ExtendedTrimesh:
         if not mesh.is_watertight:
             raise ValueError("Mesh must be watertight to compute edge normals.")
 
-        return ExtendedTrimesh._get_edge_normals(mesh)
+        return SubdivisionSmoothing._get_edge_normals(mesh)
 
     @staticmethod
     def _get_edge_normals(mesh: trimesh.Trimesh):
         """
         Get the normals for each edge in a mesh. Private method that performs the actual computation with no input validation.
-        Note: This method only works for watertight meshes and when every provided edge is present in the mesh.
+        .. note::
+            This method only works for watertight meshes and when every provided edge is present in the mesh.
 
         :param mesh: The mesh to analyze.
         :type mesh: trimesh.Trimesh
@@ -171,12 +187,12 @@ class ExtendedTrimesh:
 
         :param faces: An ndarray of shape (n, 3) representing the faces of the mesh.
         :type faces: np.ndarray
-        :param edges: An ndarray of shape (m, 2) representing the edges of the mesh.
+        :param edges: An ndarray of shape (n, 2) representing the edges of the mesh.
         :type edges: np.ndarray
-        :return: An ndarray of shape (w) containing the opposite vertex indices for each edge, where w is the number of edges.
+        :return: An ndarray of shape (n,) containing the opposite vertex indices for each edge, where w is the number of edges.
         :rtype: np.ndarray
         :raises TypeError: If faces or edges are not numpy ndarrays.
-        :raises ValueError: If faces is not a 2D array with shape (n, 3) or if edges is not a 2D array with shape (m, 2).
+        :raises ValueError: If faces is not a 2D array with shape (n, 3) or if edges is not a 2D array with shape (n, 2).
         """
         if not isinstance(faces, np.ndarray):
             raise TypeError("Faces must be a numpy ndarray.")
@@ -185,9 +201,9 @@ class ExtendedTrimesh:
         if faces.ndim != 2 or faces.shape[1] != 3:
             raise ValueError("Faces must be a 2D array with shape (n, 3).")
         if edges.ndim != 2 or edges.shape[1] != 2:
-            raise ValueError("Edges must be a 2D array with shape (m, 2).")
+            raise ValueError("Edges must be a 2D array with shape (n, 2).")
 
-        return ExtendedTrimesh._get_opposite(faces, edges)
+        return SubdivisionSmoothing._get_opposite(faces, edges)
 
     @staticmethod
     def _get_opposite(faces: np.ndarray, edges: np.ndarray):
@@ -196,9 +212,9 @@ class ExtendedTrimesh:
 
         :param faces: An ndarray of shape (n, 3) representing the faces of the mesh.
         :type faces: np.ndarray
-        :param edges: An ndarray of shape (m, 2) representing the edges of the mesh.
+        :param edges: An ndarray of shape (n, 2) representing the edges of the mesh.
         :type edges: np.ndarray
-        :return: An ndarray of shape (w) containing the opposite vertex indices for each edge, where w is the number of edges.
+        :return: An ndarray of shape (n,) containing the opposite vertex indices for each edge, where w is the number of edges.
         :rtype: np.ndarray
         """
         mask = (faces[:, :, None] == edges[:, None, :])
@@ -226,7 +242,7 @@ class ExtendedTrimesh:
         if not mesh.is_watertight:
             raise ValueError("Mesh must be watertight to compute signed angles.")
 
-        return ExtendedTrimesh._get_signed_angles(mesh)
+        return SubdivisionSmoothing._get_signed_angles(mesh)
 
     @staticmethod
     def _get_signed_angles(mesh: trimesh.Trimesh):
@@ -274,7 +290,7 @@ class ExtendedTrimesh:
             raise ValueError("Beta must be in the range [0, 1).")
 
         for i in range(iterations):
-            mesh = ExtendedTrimesh._simple_subdivide(mesh, alpha, beta)
+            mesh = SubdivisionSmoothing._simple_subdivide(mesh, alpha, beta)
         return mesh
 
     @staticmethod
@@ -290,16 +306,16 @@ class ExtendedTrimesh:
         :type beta: float
         :return: trimesh.Trimesh The subdivided mesh.
         """
-        angles = ExtendedTrimesh._get_signed_angles(mesh)
+        angles = SubdivisionSmoothing._get_signed_angles(mesh)
         new_factors = np.sin(angles) * alpha
         old_factors = np.sin(angles) * beta
         edges = mesh.face_adjacency_edges
         neighbors = mesh.face_adjacency
-        edge_norms = ExtendedTrimesh._get_edge_normals(mesh)
+        edge_norms = SubdivisionSmoothing._get_edge_normals(mesh)
         i_edge_norms = -edge_norms
 
-        opposites1 = ExtendedTrimesh._get_opposite(mesh.faces[neighbors.T[0]], edges)
-        opposites2 = ExtendedTrimesh._get_opposite(mesh.faces[neighbors.T[1]], edges)
+        opposites1 = SubdivisionSmoothing._get_opposite(mesh.faces[neighbors.T[0]], edges)
+        opposites2 = SubdivisionSmoothing._get_opposite(mesh.faces[neighbors.T[1]], edges)
         face1_edge1_int = mesh.vertices[edges[:, 0]] * new_factors[:, None] + mesh.vertices[opposites1] * \
                           (1 - new_factors)[:, None]
         face2_edge1_int = mesh.vertices[edges[:, 0]] * new_factors[:, None] + mesh.vertices[opposites2] * \
@@ -357,7 +373,7 @@ class ExtendedTrimesh:
             return
 
         for _ in range(iterations):
-            ExtendedTrimesh._simple_smooth(mesh, alpha, dist_effect)
+            SubdivisionSmoothing._simple_smooth(mesh, alpha, dist_effect)
             mesh = mesh.subdivide()
         return mesh
 
@@ -374,6 +390,7 @@ class ExtendedTrimesh:
         :type dist_effect: Literal["ignore", "weaker", "stronger"]
         :return: None. The mesh is modified in place.
         """
+
         vertices = mesh.vertices
         max_neighbors = max(map(len, mesh.vertex_neighbors))
         neighbors = np.full((vertices.shape[0], max_neighbors), -1)
@@ -386,18 +403,18 @@ class ExtendedTrimesh:
         weights = None
         match dist_effect:
             case "ignore":
-                weights = np.where(dists == 0, 0, 1)
-            case "weaker":
                 weights = np.where(dists == 0, 0, 1 / dists)
+            case "weaker":
+                weights = np.where(dists == 0, 0, 1 / dists ** 2)
             case "stronger":
                 weights = np.where(dists == 0, 0, dists)
-        avg_point = np.average(neighbor_verts, axis=1, weights=np.repeat(weights[:, :, None], 3, axis=2))
-        new = avg_point * alpha + vertices * (1 - alpha)
+        avg_point = np.average(diffs, axis=1, weights=np.repeat(weights[:, :, None], 3, axis=2))
+        new = avg_point * alpha + vertices
         mesh.vertices = new
         mesh.process()
 
     @staticmethod
-    def edge_erosion_subdivision(mesh: trimesh.Trimesh, alpha: float, beta: float, iterations: int = 1, proximity_digits: int = 6, interp: Callable | None = None):
+    def edge_erosion_subdivision(mesh: trimesh.Trimesh, alpha: float, beta: float, iterations: int = 1, proximity_digits: int = 6, interp: Callable | None = None, test = False):
         """
         Smooth a mesh in place using intelligent edge and vertex addition.
 
@@ -411,8 +428,12 @@ class ExtendedTrimesh:
         :type iterations: int
         :param proximity_digits: Number of digits to round vertex positions to for proximity checks. Default is 6.
         :type proximity_digits: int
-        :param interp: An optional pre-defined interpolation function to use for determining new vertex positions based on edge angles. If None, a default spline will be used. Default is None. (Note: This parameter should be the actual interpolation function, not a callable that returns the function. It is recommended for it to have a minimum domain of [-π, 2π] and range of [0, 1])
+        :param interp: An optional pre-defined interpolation function to use for determining new vertex positions based on edge angles. If None, a default spline will be used. Default is None.
         :type interp: Callable | None
+        .. note::
+            This parameter should be the actual interpolation function, not a callable that returns the function. It is recommended for it to have a minimum domain of [-π, 2π] and range of [0, 1]
+        :param test: If True, saves intermediate steps to the debug/debug_save directory for debugging purposes. Default is False.
+        :type test: bool
         :return: None. The mesh is modified in place.
         :raises TypeError: If mesh is not a trimesh.Trimesh object, iterations is not an integer, or alpha is not a number.
         :raises ValueError: If iterations is less than 1, alpha is not in the range (0, 1), if beta is not in the range [0, 1), if change_tol is negative, if the mesh is not watertight, or if e_mode is not "memory_efficient" or "time_efficient."
@@ -441,10 +462,10 @@ class ExtendedTrimesh:
             raise ValueError("Mesh must be watertight to perform smoothing.")
 
         for _ in range(iterations):
-            ExtendedTrimesh._edge_erosion_subdivision(mesh, alpha, beta, proximity_digits, interp)
+            SubdivisionSmoothing._edge_erosion_subdivision(mesh, alpha, beta, proximity_digits, interp, test)
 
     @staticmethod
-    def _edge_erosion_subdivision(mesh: trimesh.Trimesh, alpha: float, beta: float, proximity_digits: int = 6, interp: Callable | None = None):
+    def _edge_erosion_subdivision(mesh: trimesh.Trimesh, alpha: float, beta: float, proximity_digits: int = 6, interp: Callable | None = None, test = False):
         """
         Smooth a mesh in place using intelligent edge and vertex addition. Private method that performs the actual smoothing with no input validation.
 
@@ -456,9 +477,14 @@ class ExtendedTrimesh:
         :type beta: float
         :param proximity_digits: Number of digits to round vertex positions to for proximity checks. Default is 6.
         :type proximity_digits: int
-        :param interp: An optional pre-defined interpolation function to use for determining new vertex positions based on edge angles. If None, a default spline will be used. Default is None. (Note: This parameter should be the actual interpolation function, not a callable that returns the function. It is recommended for it to have a minimum domain of [-π, 2π] and range of [0, 1])
+        :param interp: An optional pre-defined interpolation function to use for determining new vertex positions based on edge angles. If None, a default spline will be used. Default is None.
         :type interp: Callable | None
-        :return: None. The mesh is modified in place.
+        .. note::
+            This parameter should be the actual interpolation function, not a callable that returns the function. It is recommended for it to have a minimum domain of [-π, 2π] and range of [0, 1]
+        :param test: If True, saves intermediate steps to the debug/debug_save directory for debugging purposes. Default is False.
+        :type test: bool
+        :return: An ndarray, shape (n, 2), of edges to feed into ExtendedTrimesh.simple_smooth for the best smoothing results.
+        :rtype: np.ndarray
         """
         # Get base values
         if interp is None:
@@ -483,24 +509,27 @@ class ExtendedTrimesh:
             w = np.array([4, 1, 2, 3, 1, 2, 4, 1, 3, 2, 1, 4, 1, 2, 3, 1, 2, 4])
             interp = InterpolatedUnivariateSpline(spline_set.T[0], spline_set.T[1], bbox=[-np.pi, 2 * np.pi], w=w, ext=1)
 
-        mesh.export("debug/debug_save/init_trimesh_model.obj")  # Debugging output
+        if test:
+            mesh.export("debug/debug_save/init_trimesh_model.obj")  # Debugging output
         edges = mesh.face_adjacency_edges
         neighbors = mesh.face_adjacency
-        angles = ExtendedTrimesh._get_signed_angles(mesh)
+        angles = SubdivisionSmoothing._get_signed_angles(mesh)
         new_factors = interp(angles)
-        edge_norms = ExtendedTrimesh._get_edge_normals(mesh)
+        edge_norms = SubdivisionSmoothing._get_edge_normals(mesh)
         i_edge_norms = -edge_norms
 
         # Calculate intermediate values
-        opposites1 = ExtendedTrimesh._get_opposite(mesh.faces[neighbors.T[0]], edges)
-        opposites2 = ExtendedTrimesh._get_opposite(mesh.faces[neighbors.T[1]], edges)
-        np.savez_compressed("debug/debug_save/debug_opposites", edges=mesh.vertices[edges], opposites=mesh.vertices[np.column_stack((opposites1, opposites2))])  # Debugging output
+        opposites1 = SubdivisionSmoothing._get_opposite(mesh.faces[neighbors.T[0]], edges)
+        opposites2 = SubdivisionSmoothing._get_opposite(mesh.faces[neighbors.T[1]], edges)
+        if test:
+            np.savez_compressed("debug/debug_save/debug_opposites", edges=mesh.vertices[edges], opposites=mesh.vertices[np.column_stack((opposites1, opposites2))])  # Debugging output
         face1_edge1_int = mesh.vertices[edges[:, 0]] * (1 - new_factors)[:, None] + mesh.vertices[opposites1] * new_factors[:, None]
         face1_edge2_int = mesh.vertices[edges[:, 1]] * (1 - new_factors)[:, None] + mesh.vertices[opposites1] * new_factors[:, None]
         face2_edge1_int = mesh.vertices[edges[:, 0]] * (1 - new_factors)[:, None] + mesh.vertices[opposites2] * new_factors[:, None]
         face2_edge2_int = mesh.vertices[edges[:, 1]] * (1 - new_factors)[:, None] + mesh.vertices[opposites2] * new_factors[:, None]
 
-        np.savez_compressed("debug/debug_save/debug_init_intersections", init_points=mesh.vertices[edges], intersections=np.stack([face1_edge1_int, face1_edge2_int, face2_edge1_int, face2_edge2_int], axis=1))  # Debugging output
+        if test:
+            np.savez_compressed("debug/debug_save/debug_init_intersections", init_points=mesh.vertices[edges], intersections=np.stack([face1_edge1_int, face1_edge2_int, face2_edge1_int, face2_edge2_int], axis=1))  # Debugging output
 
         face1_change1 = face1_edge1_int - mesh.vertices[edges[:, 0]]
         face1_change2 = face1_edge2_int - mesh.vertices[edges[:, 1]]
@@ -517,29 +546,33 @@ class ExtendedTrimesh:
         """
 
         # Find actual intersection points
-        face1_int1 = mesh.vertices[edges[:, 0]] + (face1_change1 * np.abs(dists[:, None])) / np.linalg.norm(face1_change1, axis=1)[:, None]
+        face1_int1 = mesh.vertices[edges[:, 0]] + (face1_change1 * np.abs(dists[:, None])) / np.where(np.linalg.norm(face1_change1, axis=1) == 0, 1, np.linalg.norm(face1_change1, axis=1))[:, None]
         face1_int1[np.linalg.norm(face1_change1, axis=1) == 0] = mesh.vertices[edges[:, 0]][np.linalg.norm(face1_change1, axis=1) == 0]
-        face1_int2 = mesh.vertices[edges[:, 1]] + (face1_change2 * np.abs(dists[:, None])) / np.linalg.norm(face1_change2, axis=1)[:, None]
+        face1_int2 = mesh.vertices[edges[:, 1]] + (face1_change2 * np.abs(dists[:, None])) / np.where(np.linalg.norm(face1_change2, axis=1) == 0, 1, np.linalg.norm(face1_change2, axis=1))[:, None]
         face1_int2[np.linalg.norm(face1_change2, axis=1) == 0] = mesh.vertices[edges[:, 1]][np.linalg.norm(face1_change2, axis=1) == 0]
-        face2_int1 = mesh.vertices[edges[:, 0]] + (face2_change1 * np.abs(dists[:, None])) / np.linalg.norm(face2_change1, axis=1)[:, None]
+        face2_int1 = mesh.vertices[edges[:, 0]] + (face2_change1 * np.abs(dists[:, None])) / np.where(np.linalg.norm(face2_change1, axis=1) == 0, 1, np.linalg.norm(face2_change1, axis=1))[:, None]
         face2_int1[np.linalg.norm(face2_change1, axis=1) == 0] = mesh.vertices[edges[:, 0]][np.linalg.norm(face2_change1, axis=1) == 0]
-        face2_int2 = mesh.vertices[edges[:, 1]] + (face2_change2 * np.abs(dists[:, None])) / np.linalg.norm(face2_change2, axis=1)[:, None]
+        face2_int2 = mesh.vertices[edges[:, 1]] + (face2_change2 * np.abs(dists[:, None])) / np.where(np.linalg.norm(face2_change2, axis=1) == 0, 1, np.linalg.norm(face2_change2, axis=1))[:, None]
         face2_int2[np.linalg.norm(face2_change2, axis=1) == 0] = mesh.vertices[edges[:, 1]][np.linalg.norm(face2_change2, axis=1) == 0]
 
         # Add vertices to the mesh
         new_vertices_debug = np.stack([face1_int1, face1_int2, face2_int1, face2_int2], axis=1)
         new_vertices = np.vstack([face1_int1, face1_int2, face2_int1, face2_int2])
-        old_verts = mesh.vertices
-        arrow_dirs = np.stack([(face1_change1 * np.abs(dists[:, None])) / np.linalg.norm(face1_change1, axis=1)[:, None],
-                               (face1_change2 * np.abs(dists[:, None])) / np.linalg.norm(face1_change2, axis=1)[:, None],
-                               (face2_change1 * np.abs(dists[:, None])) / np.linalg.norm(face2_change1, axis=1)[:, None],
-                               (face2_change2 * np.abs(dists[:, None])) / np.linalg.norm(face2_change2, axis=1)[:, None]], axis=1)
-        arrow_starts=np.stack([mesh.vertices[edges[:, 0]],
-                              mesh.vertices[edges[:, 1]],
-                              mesh.vertices[edges[:, 0]],
-                              mesh.vertices[edges[:, 1]]], axis=1)
-        np.savez_compressed("debug/debug_save/debug_changes", init_points=old_verts[edges], final_points=new_vertices_debug, arrow_dirs=arrow_dirs, arrow_starts=arrow_starts) # Debugging output
-        new_vert_inds = np.array(np.arange(old_verts.shape[0], old_verts.shape[0] + new_vertices.shape[0]))
+        old_verts = mesh.vertices.copy()
+
+        if test:
+            arrow_dirs = np.stack(arrays=[np.where(np.linalg.norm(face1_change1, axis=1)[:, None] != 0, (face1_change1 * np.abs(dists[:, None])) / np.linalg.norm(face1_change1, axis=1)[:, None], face1_change1 * 0),
+                                          np.where(np.linalg.norm(face1_change2, axis=1)[:, None] != 0, (face1_change2 * np.abs(dists[:, None])) / np.linalg.norm(face1_change2, axis=1)[:, None], face1_change2 * 0),
+                                          np.where(np.linalg.norm(face2_change1, axis=1)[:, None] != 0, (face2_change1 * np.abs(dists[:, None])) / np.linalg.norm(face2_change1, axis=1)[:, None], face2_change1 * 0),
+                                          np.where(np.linalg.norm(face2_change2, axis=1)[:, None] != 0, (face2_change2 * np.abs(dists[:, None])) / np.linalg.norm(face2_change2, axis=1)[:, None], face2_change2 * 0)],
+                                  axis=1)
+            arrow_starts=np.stack(arrays=[mesh.vertices[edges[:, 0]],
+                                          mesh.vertices[edges[:, 1]],
+                                          mesh.vertices[edges[:, 0]],
+                                          mesh.vertices[edges[:, 1]]], axis=1)
+            np.savez_compressed("debug/debug_save/debug_changes", init_points=old_verts[edges], final_points=new_vertices_debug, arrow_dirs=arrow_dirs, arrow_starts=arrow_starts) # Debugging output
+
+        new_vert_inds = np.arange(old_verts.shape[0], old_verts.shape[0] + new_vertices.shape[0])
         edges = np.sort(mesh.face_adjacency_edges, axis=1)
         new_vertices = np.vstack([mesh.vertices, new_vertices])
 
@@ -551,137 +584,271 @@ class ExtendedTrimesh:
         new_vert_edges = np.sort(np.vstack(
             [face1_int1_edges[:, None, :], face1_int2_edges[:, None, :], face2_int1_edges[:, None, :],
              face2_int2_edges[:, None, :]]), axis=1)
-        new_vert_edge_inds = ExtendedTrimesh._get_row_inds(new_vert_edges, edges)
+        new_vert_edge_inds = SubdivisionSmoothing._get_row_inds(new_vert_edges, edges)
         sort_idx = np.argsort(new_vert_edge_inds)
         sorted_vert_edge_inds = new_vert_edge_inds[sort_idx]
         sorted_verts = new_vert_inds[sort_idx]
         unique_edge_inds, group_starts = np.unique(sorted_vert_edge_inds, return_index=True)
         verts_by_edge = np.array(np.split(sorted_verts, group_starts[1:]))
-        np.savez_compressed("debug/debug_save/debug_point_sorting",
-                            verts_by_edge=new_vertices[verts_by_edge])  # Debugging output
+
+        if test:
+            np.savez_compressed("debug/debug_save/debug_point_sorting",
+                                verts_by_edge=new_vertices[verts_by_edge])  # Debugging output
+
         dist_from_start = np.linalg.norm(new_vertices[verts_by_edge] - new_vertices[edges[:, 0]][:, None, :], axis=2)
         edge_dirs = new_vertices[edges[:, 1]] - new_vertices[edges[:, 0]]
         order = np.argsort(dist_from_start, axis=1)
         verts_by_edge = np.take_along_axis(verts_by_edge, order, axis=1)
-        np.savez_compressed("debug/debug_save/debug_point_dirs", verts_by_edge=new_vertices[verts_by_edge],
-                            starts=new_vertices[edges[:, 0]], edge_dirs=edge_dirs)  # Debugging output
 
-        polygons = ExtendedTrimesh._add_verts_to_edge(mesh, edges, verts_by_edge)
-        np.savez_compressed("debug/debug_save/debug_polygons", vertices=new_vertices, polygons=polygons) # Debugging output
-        np.savez_compressed("debug/debug_save/debug_triangles", vertices=new_vertices, triangles=ExtendedTrimesh._triangulate_polygons(polygons, flatten=False)) # Debugging output
-        new_triangles = ExtendedTrimesh._triangulate_polygons(polygons, flatten=True)
+        if test:
+            np.savez_compressed("debug/debug_save/debug_point_dirs", verts_by_edge=new_vertices[verts_by_edge],
+                                starts=new_vertices[edges[:, 0]], edge_dirs=edge_dirs)  # Debugging output
+
+        polygons = SubdivisionSmoothing._add_verts_to_edge(mesh, edges, verts_by_edge)
+
+        if test:
+            np.savez_compressed("debug/debug_save/debug_polygons", vertices=new_vertices, polygons=polygons) # Debugging output
+            np.savez_compressed("debug/debug_save/debug_triangles", vertices=new_vertices, triangles=SubdivisionSmoothing._triangulate_polygons(polygons, flatten=False)) # Debugging output
+
+        new_triangles = SubdivisionSmoothing._triangulate_polygons(polygons, flatten=True)
 
         # Add new faces to the mesh and process it
         mesh.vertices = new_vertices.copy()
         mesh.faces = new_triangles
 
-        temp_mesh = mesh.copy()
-        temp_mesh.process()
-        temp_mesh._cache.clear()
-        temp_mesh.merge_vertices(digits_vertex=proximity_digits)
-        ExtendedTrimesh._remove_degen_faces(temp_mesh)
-        trimesh.repair.fill_holes(temp_mesh)
-        temp_mesh.remove_unreferenced_vertices()
-        temp_mesh.process()
-        temp_mesh._cache.clear()
-        temp_mesh.export("debug/debug_save/middle_trimesh_model.obj")  # Debugging output
+        if test:
+            temp_mesh = trimesh.Trimesh(mesh.vertices.copy(), mesh.faces.copy())
+            temp_mesh.process()
+            temp_mesh._cache.clear()
+            temp_mesh.merge_vertices(digits_vertex=proximity_digits)
+            SubdivisionSmoothing._remove_degen_faces(temp_mesh)
+            trimesh.repair.fill_holes(temp_mesh)
+            temp_mesh.remove_unreferenced_vertices()
+            temp_mesh.process()
+            temp_mesh._cache.clear()
+            temp_mesh.export("debug/debug_save/middle_trimesh_model.obj")  # Debugging output
 
         # Calculate edge changes
         edge_factor = dists * beta
+        edge_vectors = mesh.vertices[edges[:, 1]] - mesh.vertices[edges[:, 0]]
+        edge_vectors /= np.linalg.norm(edge_vectors, axis=1)[:, None]
+        plane_norms = np.cross(edge_vectors, edge_norms)
+        plane_norms /= np.linalg.norm(plane_norms, axis=1)[:, None]
 
-        #""" Method 1 (Face-Based Vectors + Total Edge Move)
-        face1_change1_norm = np.linalg.norm(face1_change1, axis=1)
-        face2_change1_norm = np.linalg.norm(face2_change1, axis=1)
-        face1_change2_norm = np.linalg.norm(face1_change2, axis=1)
-        face2_change2_norm = np.linalg.norm(face2_change2, axis=1)
+        """ Method 1 (Face-Based Vectors + Total Edge Move)
+        target = np.average(np.stack([mesh.vertices[opposites1], mesh.vertices[opposites2]], axis=1), axis=1)
+        e1_vec_unit = target - mesh.vertices[edges[:, 0]] # Calculate a rough edge vector by average the vectors to each face intersection point, therefore accounting for some inward movement instead of just along the edge normal
+        e1_vec_unit /= np.linalg.norm(e1_vec_unit, axis=1)[:, None] # Normalize the calculated edge vector
+        i_norm_e1_diff = np.vecdot(e1_vec_unit, plane_norms, axis=1)[:, None] * plane_norms # Get the component of the calculated edge vector that is perpendicular to the inverse edge normal and the edge vector
+        e1_adjusted_vec = e1_vec_unit - i_norm_e1_diff # Remove the perpendicular component from the calculated edge vector to get a vector that is only along the inverse edge normal and the edge vector
+        e1_adjusted_vec /= np.linalg.norm(e1_adjusted_vec, axis=1)[:, None] # Normalize the adjusted edge vector
+        e1_i_edge_dot = np.vecdot(e1_adjusted_vec, i_edge_norms, axis=1) # Get the similarity between the inverse edge normal and the adjusted edge vector
+        e1_vec = e1_adjusted_vec * np.where(e1_i_edge_dot != 0, (edge_factor**2 / e1_i_edge_dot), 0)[:, None] # Scale the adjusted edge vector by the right amount to match the desired edge movement along the inverse edge normal
 
-        e1_vec_unit = face1_change1 / np.where(face1_change1_norm != 0, face1_change1_norm, 1)[:, None] + face2_change1 / np.where(face2_change1_norm != 0, face2_change1_norm, 1)[:, None]
-        e1_vec_unit /= np.linalg.norm(e1_vec_unit, axis=1)[:, None]
-        e1_i_edge_dot = np.vecdot(e1_vec_unit, i_edge_norms, axis=1)
-        e1_vec = e1_vec_unit * (edge_factor / np.where(e1_i_edge_dot != 0, e1_i_edge_dot, 1))[:, None]
+        e2_vec_unit = target - mesh.vertices[edges[:, 1]] # Calculate a rough edge vector by average the vectors to each face intersection point, therefore accounting for some inward movement instead of just along the edge normal
+        e2_vec_unit /= np.linalg.norm(e2_vec_unit, axis=1)[:, None] # Normalize the calculated edge vector
+        i_norm_e2_diff = np.vecdot(e2_vec_unit, plane_norms, axis=1)[:, None] * plane_norms # Get the component of the calculated edge vector that is perpendicular to the inverse edge normal and the edge vector
+        e2_adjusted_vec = e2_vec_unit - i_norm_e2_diff # Remove the perpendicular component from the calculated edge vector to get a vector that is only along the inverse edge normal and the edge vector
+        e2_adjusted_vec /= np.linalg.norm(e2_adjusted_vec, axis=1)[:, None] # Normalize the adjusted edge vector
+        e2_i_edge_dot = np.vecdot(e2_adjusted_vec, i_edge_norms, axis=1) # Get the similarity between the inverse edge normal and the adjusted edge vector
+        e2_vec = e2_adjusted_vec * np.where(e2_i_edge_dot != 0, (edge_factor**2 / e2_i_edge_dot), 0)[:, None] # Scale the adjusted edge vector by the right amount to match the desired edge movement along the inverse edge normal
 
-        e2_vec_unit = face1_change2 / np.where(face1_change2_norm != 0, face1_change2_norm, 1)[:, None] + face2_change2 / np.where(face2_change2_norm != 0, face2_change2_norm, 1)[:, None]
-        e2_vec_unit /= np.linalg.norm(e2_vec_unit, axis=1)[:, None]
-        e2_i_edge_dot = np.vecdot(e2_vec_unit, i_edge_norms, axis=1)
-        e2_vec = e2_vec_unit * (edge_factor / np.where(e2_i_edge_dot != 0, e2_i_edge_dot, 1))[:, None]
-        vert_moves = np.zeros(mesh.vertices.shape, dtype=mesh.vertices.dtype)
-        vert_adds = np.zeros(mesh.vertices.shape[:-1], dtype=mesh.vertices.dtype)
+        np.savez_compressed("debug/debug_save/debug_edge_vectors", vertices=new_vertices, edges=edges, rough_edge_vectors=np.stack([e1_vec_unit, e2_vec_unit], axis=1), adjusted_edge_vectors=np.stack([e1_adjusted_vec, e2_adjusted_vec], axis=1), final_edge_vectors=np.stack([e1_vec, e2_vec], axis=1), edge_vectors=edge_vectors, norms=edge_norms, planes=plane_norms, target=i_edge_norms * edge_factor[:, None])  # Debugging output
 
-        # Tally edge changes
-        np.add.at(vert_moves, edges[:, 0], e1_vec)
-        np.add.at(vert_adds, edges[:, 0], 1)
-        np.add.at(vert_moves, edges[:, 1], e2_vec)
-        np.add.at(vert_adds, edges[:, 1], 1)
-        vert_moves_temp = vert_moves / np.where(vert_adds != 0, vert_adds, 1)[:, None]
-        np.savez_compressed("debug/debug_save/debug_edge_changes", vertices=mesh.vertices, edges=mesh.vertices[edges], changes=np.stack([e1_vec, e2_vec], axis=1), combined=vert_moves_temp, norms=i_edge_norms)  # Debugging output
-
+        #np.savez_compressed("debug/debug_save/debug_edge_changes", vertices=mesh.vertices, edges=mesh.vertices[edges], changes=np.stack([e1_vec, e2_vec], axis=1), combined=vert_moves_temp, norms=i_edge_norms)  # Debugging output
+        # Method 1.1 Edge Movement + Minimum Vertex Movement
         # Calculate vertex changes
-        dist_from_start = np.sort(dist_from_start, axis=1)
-        vert_vec_set = np.repeat(np.stack([vert_moves_temp[edges[:, 0]], vert_moves_temp[edges[:, 1]]], axis=1)[:, None, :, :], 4, axis=1)
-        vert_vec_norm_set = np.linalg.norm(vert_vec_set, axis=3)
-        edge_dists = np.linalg.norm(mesh.vertices[edges[:, 1]] - mesh.vertices[edges[:, 0]], axis=1)
-        vert_weight1 = np.where((edge_dists[:, None] - dist_from_start) != 0, np.where(dist_from_start != 0, 1 / dist_from_start, 1), 0)
-        vert_weight2 = np.where((edge_dists[:, None] - dist_from_start) != 0, np.where(dist_from_start != 0, 1 / (edge_dists[:, None] - dist_from_start), 0), 1)
-        vert_weights = np.stack([vert_weight1, vert_weight2], axis=2)
-        vert_vecs_unit = np.average(vert_vec_set, weights=np.repeat(vert_weights[:, :, :, None], 3, axis=3), axis=2)
-        vert_vecs_unit_norm = np.linalg.norm(vert_vecs_unit, axis=2)
-        vert_vecs_unit /= np.where(vert_vecs_unit_norm != 0, vert_vecs_unit_norm, 1)[:, :, None]
-        vert_vec_norms = np.average(vert_vec_norm_set, weights=vert_weights, axis=2)
-        vert_vecs = vert_vecs_unit * vert_vec_norms[:, :, None]
-        #"""
+        vert_vecs_init = target[:, None, :] - mesh.vertices[verts_by_edge]
+        vert_vecs_unit = vert_vecs_init / np.linalg.norm(vert_vecs_init, axis=2)[:, :, None]
+        vert_vec_diffs = np.vecdot(vert_vecs_unit, np.repeat(plane_norms[:, None, :], 4, axis=1), axis=2)[:, :, None] * plane_norms[:, None, :]
+        vert_vecs_unit = vert_vecs_unit - vert_vec_diffs
+        vert_vecs_unit /= np.linalg.norm(vert_vecs_unit, axis=2)[:, :, None]
+        vert_i_edge_dots = np.vecdot(vert_vecs_unit, i_edge_norms[:, None, :], axis=2)
+        vert_vecs = vert_vecs_unit * ((edge_factor**2)[:, None] / vert_i_edge_dots)[:, :, None]
 
-        """ Method 2 (Inverted Edge Vectors)
-        edge_moves = i_edge_norms * edge_factor[:, None]
-        e1_vec = edge_moves
-        e2_vec = edge_moves
+        vert_moves_init = np.zeros(mesh.vertices.shape, dtype=mesh.vertices.dtype)
+        np.add.at(vert_moves_init, verts_by_edge[:, 0], vert_vecs[:, 0])
+        np.add.at(vert_moves_init, verts_by_edge[:, 1], vert_vecs[:, 1])
+        np.add.at(vert_moves_init, verts_by_edge[:, 2], vert_vecs[:, 2])
+        np.add.at(vert_moves_init, verts_by_edge[:, 3], vert_vecs[:, 3])
+        np.add.at(vert_moves_init, edges[:, 0], e1_vec)
+        np.add.at(vert_moves_init, edges[:, 1], e2_vec)
+        vert_move_norms = np.linalg.norm(vert_moves_init, axis=1)
+        vert_moves_unit = vert_moves_init / np.where(vert_move_norms != 0, vert_move_norms, 1)[:, None]
+        
+        ignore_main = set()
+        for _ in range(4):
+            mesh.faces, ignore = ExtendedTrimesh.combine_vertices(mesh, 10 ** -proximity_digits)
+            ignore_main.update(ignore)
 
-        vert_moves = np.zeros(mesh.vertices.shape, dtype=mesh.vertices.dtype)
-        vert_adds = np.zeros(mesh.vertices.shape[:-1], dtype=mesh.vertices.dtype)
+        ignore = np.array(list(ignore_main), dtype=np.int64)
+        
 
-        np.add.at(vert_moves, edges[:, 0], edge_moves)
-        np.add.at(vert_adds, edges[:, 0], 1)
-        np.add.at(vert_moves, edges[:, 1], edge_moves)
-        np.add.at(vert_adds, edges[:, 1], 1)
-        vert_moves_temp = vert_moves / np.where(vert_adds != 0, vert_adds, 1)[:, None]
-        np.savez_compressed("debug/debug_save/debug_edge_changes", vertices=mesh.vertices, edges=mesh.vertices[edges], changes=np.stack([e1_vec, e2_vec], axis=1), combined=vert_moves_temp, norms=i_edge_norms)  # Debugging output
+        # TODO: Consider neighbor based edge vertex changes, then edge vertex based vertex changes.
+        vert_moves = ExtendedTrimesh._compute_vertex_changes(mesh.vertices, vert_vecs, np.stack([e1_vec, e2_vec], axis=1), verts_by_edge, edges, vert_moves_unit)
 
-        vert_vecs = np.stack([edge_moves, edge_moves, edge_moves, edge_moves], axis=1)
+        np.savez_compressed("debug/debug_save/debug_vertex_moves", vertices=new_vertices, vert_moves_unit=vert_moves_unit, vert_moves=vert_moves, edge_moves=np.stack([e1_vec, e2_vec], axis=1), edges=edges, verts_by_edge=verts_by_edge, vert_vecs=vert_vecs)  # Debugging output
+
+        # Method 2 (Edge-Based Vectors + Minimum Vertex Movement)
+        vert_moves_init = np.zeros(mesh.vertices.shape, dtype=mesh.vertices.dtype)
+        np.add.at(vert_moves_init, edges[:, 0], e1_vec)
+        np.add.at(vert_moves_init, edges[:, 1], e2_vec)
+        vert_move_norms = np.linalg.norm(vert_moves_init, axis=1)
+        vert_moves_unit = vert_moves_init / np.where(vert_move_norms != 0, vert_move_norms, 1)[:, None]
+
+        copy_mesh = trimesh.Trimesh(mesh.vertices.copy(), mesh.faces.copy())
+        copy_mesh.merge_vertices(digits_vertex=proximity_digits)
+        mesh.faces = copy_mesh.faces
+
+        nbrs = NumbaList()
+        for i in range(mesh.vertices.shape[0]):
+            if len(mesh.vertex_neighbors[i]) != 0:
+                nbrs.append(NumbaList(mesh.vertex_neighbors[i]))
+            else:
+                nbrs.append(NumbaList.empty_list(numba.types.int64))
+        vert_moves = ExtendedTrimesh._compute_edge_changes(mesh.vertices, edges, vert_moves_unit, nbrs) * beta
+        np.savez_compressed("debug/debug_save/debug_edge_moves", vertices=new_vertices, vert_moves_unit=vert_moves_unit, vert_moves=vert_moves, edge_moves=np.stack([e1_vec, e2_vec], axis=1), edges=edges)  # Debugging output
+        dist_from_start = np.linalg.norm(new_vertices[verts_by_edge] - new_vertices[edges[:, 0]][:, None, :], axis=2)
+        edge_dists = np.linalg.norm(new_vertices[edges[:, 1]] - new_vertices[edges[:, 0]], axis=1)
+        weights = np.stack([dist_from_start, edge_dists[:, None] - dist_from_start], axis=2)
+        middle_vert_affectors = np.stack([vert_moves[edges[:, 0]], vert_moves[edges[:, 1]]], axis=1)
+        middle_vert_affectors = np.repeat(middle_vert_affectors[:, None, :, :], 4, axis=1)
+        middle_vert_moves = np.average(middle_vert_affectors, axis=2, weights=np.repeat(weights[:, :, :, None], 3, axis=3))
+        i_middle_verts_dot = np.vecdot(middle_vert_moves, plane_norms[:, None, :], axis=2)
+        middle_vert_moves_adjusted = middle_vert_moves - i_middle_verts_dot[:, :, None] * plane_norms[:, None, :]
+        np.add.at(vert_moves, verts_by_edge[:, 0], middle_vert_moves_adjusted[:, 0])
+        np.add.at(vert_moves, verts_by_edge[:, 1], middle_vert_moves_adjusted[:, 1])
+        np.add.at(vert_moves, verts_by_edge[:, 2], middle_vert_moves_adjusted[:, 2])
+        np.add.at(vert_moves, verts_by_edge[:, 3], middle_vert_moves_adjusted[:, 3])
         """
 
-        # Tally vertex changes
-        np.add.at(vert_moves, verts_by_edge[:, 0], vert_vecs[:, 0])
-        np.add.at(vert_adds, verts_by_edge[:, 0], 1)
-        np.add.at(vert_moves, verts_by_edge[:, 1], vert_vecs[:, 1])
-        np.add.at(vert_adds, verts_by_edge[:, 1], 1)
-        np.add.at(vert_moves, verts_by_edge[:, 2], vert_vecs[:, 2])
-        np.add.at(vert_adds, verts_by_edge[:, 2], 1)
-        np.add.at(vert_moves, verts_by_edge[:, 3], vert_vecs[:, 3])
-        np.add.at(vert_adds, verts_by_edge[:, 3], 1)
+        face1_int1_inds = np.arange(old_verts.shape[0], old_verts.shape[0] + face1_int1.shape[0])
+        face1_int2_inds = np.arange(old_verts.shape[0] + face1_int1.shape[0], old_verts.shape[0] + face1_int1.shape[0] + face1_int2.shape[0])
+        face2_int1_inds = np.arange(old_verts.shape[0] + face1_int1.shape[0] + face1_int2.shape[0], old_verts.shape[0] + face1_int1.shape[0] + face1_int2.shape[0] + face2_int1.shape[0])
+        face2_int2_inds = np.arange(old_verts.shape[0] + face1_int1.shape[0] + face1_int2.shape[0] + face2_int1.shape[0], old_verts.shape[0] + face1_int1.shape[0] + face1_int2.shape[0] + face2_int1.shape[0] + face2_int2.shape[0])
+        edge_set = np.vstack([np.column_stack([face1_int1_inds, face1_int2_inds]), np.column_stack([face2_int1_inds, face2_int2_inds])])
 
-        # Apply changes
-        vert_moves /= np.where(vert_adds != 0, vert_adds, 1)[:, None]
-        mesh.vertices += vert_moves
-        np.savez_compressed("debug/debug_save/debug_vertex_changes", vertices=new_vertices[verts_by_edge],
-                            edges=new_vertices[edges], edge_changes=np.stack([e1_vec, e2_vec], axis=1),
-                            changes=vert_vecs, edge_moves=vert_moves[edges], norms=i_edge_norms, new_verts=mesh.vertices, polygons=polygons)
+        old_vertices = mesh.vertices.copy()
+
+        #mesh.vertices += vert_moves
+
+        #np.savez_compressed("debug/debug_save/debug_final_changes", new_vertices=mesh.vertices, old_vertices=old_vertices, faces=mesh.faces, edges=edges, verts_by_edge=verts_by_edge, moves=vert_moves) # Debugging output
 
         # Cleanup
-        mesh.process()
-        mesh._cache.clear()
-        mesh.merge_vertices(digits_vertex=proximity_digits)
-        ExtendedTrimesh._remove_degen_faces(mesh)
+        #mesh.merge_vertices(digits_vertex=proximity_digits)
+        mesh.faces = SubdivisionSmoothing.combine_vertices(mesh, 10 ** -proximity_digits)[0]
+        SubdivisionSmoothing._remove_degen_faces(mesh)
         trimesh.repair.fill_holes(mesh)
-        mesh.remove_unreferenced_vertices()
         mesh.process()
-        mesh._cache.clear()
-        mesh.export("debug/debug_save/final_trimesh_model.obj")  # Debugging output
+
+        if test:
+            mesh.export("debug/debug_save/final_trimesh_model.obj")  # Debugging output
+        return edge_set
+
+    @staticmethod
+    @njit()
+    def _compute_edge_changes(vertices: np.ndarray, edges: np.ndarray, vert_moves_unit: np.ndarray, neighbors: numba.typed.List):
+        """
+        Compute the change in for each original vertices (the ones that were present before edge subdivision) based on the provided vertices and neighbors. Private method that performs the actual computation with no input validation.
+        .. note::
+            This method is not meant to be used externally, only by the edge_erosion_subdivision method (for numba optimization), and therefore does not have a public counterpart and has limited documentation)
+
+        :param vertices: The vertices of the mesh, shape (m, 3) where m is the number of vertices in the mesh.
+        :type vertices: np.ndarray
+        :param edges: The edge endpoint vertex indices, shape (n, 2), where n is the number of edges
+        :type edges: np.ndarray
+        :param vert_moves_unit: The unit movement vectors for each vertex in the mesh, shape (m, 3) where m is the number of vertices in the mesh.
+        :type vert_moves_unit: np.ndarray
+        :param neighbors: The neighboring vertex indices for each vertex.
+        :type neighbors: numba.typed.List
+        :return: The movement vector for each original vertex in the mesh, shape (k, 3) where k is the number of original vertices in the mesh.
+        :rtype: np.ndarray
+        """
+        vert_move_min_proj_dist = np.full(vertices.shape[0], np.inf)
+        for i in range(edges.shape[0]):
+            for j in range(2):
+                v = edges[i, j]
+                for k in range(len(neighbors[v])):
+                    nbr = neighbors[v][k]
+                    vec = vertices[nbr] - vertices[v]
+                    if np.linalg.norm(vec) == 0:
+                        continue
+                    proj_dist = np.dot(vec, vert_moves_unit[v])
+                    if np.abs(proj_dist) < np.abs(vert_move_min_proj_dist[v]):
+                        vert_move_min_proj_dist[v] = proj_dist
+        vert_moves = vert_moves_unit * np.where(vert_move_min_proj_dist[:, None] != np.inf, vert_move_min_proj_dist[:, None], 0)
+        return vert_moves
+
+    @staticmethod
+    def combine_vertices(mesh: trimesh.Trimesh, tol: float = 1e-6):
+        """
+        Combine vertices that are within a certain tolerance of each other. Public method that validates input types and dimensions.
+
+        :param mesh: The mesh to process.
+        :type mesh: trimesh.Trimesh
+        :param tol: The tolerance for considering two vertices as the same. Default is 1e-6.
+        :type tol: float
+        :return: The updated faces and a list of removed vertex indices.
+        :rtype: Tuple[np.ndarray, List[int]]
+        :raises TypeError: If mesh is not a trimesh.Trimesh instance or if tol is not a float.
+        :raises ValueError: If tol is not positive.
+        """
+        if not isinstance(mesh, trimesh.Trimesh):
+            raise TypeError("Mesh must be a trimesh.Trimesh instance.")
+        if not isinstance(tol, float):
+            raise TypeError("Tolerance must be a float.")
+        if tol <= 0:
+            raise ValueError("Tolerance must be positive.")
+        if mesh.is_empty:
+            return
+
+        neighbors = NumbaList()
+        for item in mesh.vertex_neighbors:
+            if len(item) == 0:
+                neighbors.append(np.empty(0, dtype=np.int64))
+            else:
+                neighbors.append(np.array(item, dtype=np.int64))
+        return SubdivisionSmoothing._combine_vertices(mesh.vertices, mesh.faces, neighbors, tol)
+
+    @staticmethod
+    @njit()
+    def _combine_vertices(verts: np.ndarray, faces: np.ndarray, neighbors: numba.typed.List, tol=1e-6):
+        """
+        Combine vertices that are within a certain tolerance of each other. Private method that performs the actual combination with no input validation.
+
+        :param verts: The vertices of the mesh, shape (m, n) where m is the number of vertices and n is the dimension (usually 3).
+        :type verts: np.ndarray
+        :param faces: The faces of the mesh, shape (k, l) where k is the number of faces and l is the number of vertices per face.
+        :type faces: np.ndarray
+        :param neighbors: The neighboring vertex indices for each vertex.
+        :type neighbors: numba.typed.List
+        :param tol: The tolerance for considering two vertices as the same. Default is 1e-6.
+        :type tol: float
+        :return: The updated faces and a list of removed vertex indices.
+        :rtype: Tuple[np.ndarray, List[int]]
+        """
+
+        faces = faces.copy()
+        to_remove = []
+        for i, nbrs in enumerate(neighbors):
+            if i in to_remove:
+                continue
+            for nbr in nbrs:
+                if nbr in to_remove:
+                    continue
+                if np.allclose(verts[i], verts[nbr], atol=tol):
+                    for face in faces:
+                        face[face == nbr] = i
+                    to_remove.append(nbr)
+        return faces, to_remove
 
     @staticmethod
     def triangulate_polygons(polygons: np.ndarray, flatten: bool = True):
         """
         Returns faces created by triangulating all input polygons. Public method that validates input types and dimensions.
 
-        (Note: This method is specialized, and only works with polygons that have exactly 15 vertices. For general polygon triangulation, consider using methods like mapbox-earcut, or scipy.spatial.Delaunay)
+        .. note::
+            This method is specialized, and only works with polygons that have exactly 15 vertices. For general polygon triangulation, consider using methods like mapbox-earcut, or scipy.spatial.Delaunay
 
         :param polygons: An ndarray of polygons shaped (n, 15), where each polygon is a list of vertex indices and n is the number of polygons. Polygons must have exactly 15 vertices.
         :type polygons: ndarray
@@ -701,14 +868,15 @@ class ExtendedTrimesh:
         if not isinstance(flatten, bool):
             raise TypeError("Flatten must be a boolean.")
 
-        return ExtendedTrimesh._triangulate_polygons(polygons, flatten)
+        return SubdivisionSmoothing._triangulate_polygons(polygons, flatten)
 
     @staticmethod
     def _triangulate_polygons(polygons: np.ndarray, flatten: bool = True):
         """
         Returns a list of edges to create to triangulate every polygon. Private method that performs the actual triangulation with no input validation.
 
-        (Note: This method is specialized, and only works with polygons that have exactly 15 vertices. For general polygon triangulation, consider using methods like mapbox-earcut, or scipy.spatial.Delaunay)
+        .. note::
+            This method is specialized, and only works with polygons that have exactly 15 vertices. For general polygon triangulation, consider using methods like mapbox-earcut, or scipy.spatial.Delaunay
 
         :param polygons: An ndarray of polygons shaped (n, 15), where each polygon is a list of vertex indices and n is the number of polygons. Polygons must have exactly 15 vertices.
         :type polygons: ndarray
@@ -769,7 +937,7 @@ class ExtendedTrimesh:
         if mesh.is_empty:
             return
 
-        return ExtendedTrimesh._add_verts_to_edge(mesh, edges, replacements)
+        return SubdivisionSmoothing._add_verts_to_edge(mesh, edges, replacements)
 
     @staticmethod
     def _add_verts_to_edge(mesh: trimesh.Trimesh, edges: np.ndarray, replacements: np.ndarray):
@@ -836,7 +1004,7 @@ class ExtendedTrimesh:
         if mesh.is_empty:
             return
 
-        ExtendedTrimesh._remove_degen_faces(mesh)
+        SubdivisionSmoothing._remove_degen_faces(mesh)
 
     @staticmethod
     def _remove_degen_faces(mesh: trimesh.Trimesh):
@@ -848,9 +1016,7 @@ class ExtendedTrimesh:
         :return: None. The mesh is modified in place.
         """
         areas = mesh.area_faces
-        if areas.size == 0:
-            return
-        mask = areas > 0
+        mask = areas > 1e-6
         mesh.update_faces(mask)
         mesh.remove_unreferenced_vertices()
 
@@ -871,7 +1037,7 @@ class ExtendedTrimesh:
         if mesh.is_empty:
             return np.zeros((0, 2), dtype=int)
 
-        return ExtendedTrimesh._closest_vertices(mesh)
+        return SubdivisionSmoothing._closest_vertices(mesh)
 
     @staticmethod
     def _closest_vertices(mesh: trimesh.Trimesh):
@@ -889,17 +1055,16 @@ class ExtendedTrimesh:
         closest_distances = dists[np.arange(len(mesh.vertices)), closest_indices]
         return closest_indices, closest_distances
 
+
 if __name__ == "__main__":
     # Example usage
     thing = "inward_pyramid"
     np.set_printoptions(threshold=sys.maxsize)
-    print(f"{Fore.CYAN}Loading mesh \"meshes/{thing}/{thing}.obj\"...{Fore.RESET}")
     mesh = trimesh.load_mesh(f"meshes/{thing}/{thing}.obj")
-    #mesh = ExtendedTrimesh.simple_subdivide(mesh, alpha=0.5, beta=0.5, iterations=5)
-    #mesh.export(f"meshes/{thing}/{thing}_simple.obj")
-    ExtendedTrimesh.edge_erosion_subdivision(mesh, alpha=0.9, beta=0.5, iterations=1, proximity_digits=6)
-    mesh.export(f"meshes/{thing}/{thing}_edge_erosion.obj")
-    #mesh = ExtendedTrimesh.simple_smooth(mesh, alpha=0.3, iterations=5, dist_effect="stronger")
-    #mesh.export(f"meshes/{thing}/{thing}_simple_smooth.obj")
-    print(mesh.is_winding_consistent)
-    print(mesh.is_watertight)
+    simple_sub_mesh = ExtendedTrimesh.simple_subdivide(mesh, alpha=0.5, beta=0.5, iterations=5)
+    simple_sub_mesh.export(f"meshes/{thing}/{thing}_simple.obj")
+    simple_smooth_mesh = ExtendedTrimesh.simple_smooth(mesh, alpha=0.3, iterations=5, dist_effect="stronger")
+    simple_smooth_mesh.export(f"meshes/{thing}/{thing}_simple_smooth.obj")
+    SubdivisionSmoothing.edge_erosion_subdivision(mesh, alpha=0.9, beta=0.5, iterations=2, proximity_digits=6)
+    mesh.export(f"meshes/{thing}/{thing}_edge_erosion3.obj")
+    np.savez_compressed(f"debug/debug_save/broken_faces.npz", broken_faces=trimesh.repair.broken_faces(mesh), edge_face_ownership=mesh.edges_face, edges=mesh.edges, vertices=mesh.vertices, neighborhood=mesh.face_neighborhood, faces=mesh.faces)

@@ -239,12 +239,105 @@ def debug_neighbors():
         plotter.view_isometric()
         plotter.show()
 
+def debug_edge_vectors():
+    mesh = pv.read(dir + "/debug_save/middle_trimesh_model.obj")
+    loaded = np.load(dir + "/debug_save/debug_edge_vectors.npz", allow_pickle=True)
+    vertices = loaded['vertices']
+    edges = loaded['edges']
+    rough_edge_vectors = loaded['rough_edge_vectors']
+    adjusted_edge_vectors = loaded['adjusted_edge_vectors']
+    final_edge_vectors = loaded['final_edge_vectors']
+    target = loaded['target']
+    edge_vectors = loaded['edge_vectors']
+    norms = loaded['norms']
+    planes = loaded['planes']
+    reference_points = vertices[edges[:, 0]] - 2 * edge_vectors
+    for i in range(edges.shape[0]):
+        plotter = pv.Plotter()
+        plotter.add_mesh(mesh, style="wireframe", line_width=2, color='black')
+        plotter.add_points(pv.PolyData(vertices[edges[i]]), color='red', point_size=5)
+        plotter.add_arrows(vertices[edges[i]], rough_edge_vectors[i], color="purple")
+        plotter.add_arrows(vertices[edges[i]], adjusted_edge_vectors[i], color="blue")
+        plotter.add_arrows(vertices[edges[i]], final_edge_vectors[i], color="green")
+        plotter.add_arrows(vertices[edges[i]], np.repeat(target[i][None, :], 2, axis=0), color="orange")
+        plotter.add_arrows(reference_points[i], edge_vectors[i], color="black")
+        plotter.add_arrows(reference_points[i], norms[i], color="orange")
+        plotter.add_arrows(reference_points[i], planes[i], color="red")
+        plotter.view_isometric()
+        plotter.show()
+
+def debug_vertex_moves():
+    mesh = pv.read(dir + "/debug_save/middle_trimesh_model.obj")
+    loaded = np.load(dir + "/debug_save/debug_vertex_moves.npz", allow_pickle=True)
+    vertices = loaded['vertices']
+    edges = loaded['edges']
+    vert_moves_unit = loaded['vert_moves_unit']
+    vert_moves = loaded['vert_moves']
+    edge_moves = loaded['edge_moves']
+    verts_by_edge = loaded['verts_by_edge']
+    vert_vecs = loaded['vert_vecs']
+    for i in range(edges.shape[0]):
+        plotter = pv.Plotter()
+        plotter.add_mesh(mesh, style="wireframe", line_width=2, color='black')
+        plotter.add_points(pv.PolyData(vertices[verts_by_edge[i]]), color='red', point_size=5)
+        plotter.add_points(pv.PolyData(vertices[edges[i]]), color='green', point_size=10)
+        plotter.add_arrows(vertices[verts_by_edge[i]], vert_vecs[i], color="purple")
+        plotter.add_arrows(vertices[verts_by_edge[i]], vert_moves_unit[verts_by_edge[i]], color="blue")
+        plotter.add_arrows(vertices[edges[i]], vert_moves_unit[edges[i]], color="orange")
+        plotter.add_arrows(vertices[edges[i]], edge_moves[i], color="black")
+        plotter.add_arrows(vertices[edges[i]], vert_moves[edges[i]], color="green")
+        plotter.add_arrows(vertices[verts_by_edge[i]], vert_moves[verts_by_edge[i]], color="red")
+        plotter.view_isometric()
+        plotter.show()
+
 def debug_final():
     final = pv.read(dir + "/debug_save/final_trimesh_model.obj")
     plotter = pv.Plotter()
-    plotter.add_mesh(final, color='lightblue', show_edges=True, edge_color='black')
+    plotter.add_mesh(final, color='red', show_edges=True, edge_color='black', opacity=0.3)
     plotter.view_isometric()
     plotter.show()
+
+def debug_final_changes():
+    loaded = np.load(dir + "/debug_save/debug_final_changes.npz", allow_pickle=True)
+    new_vertices = loaded['new_vertices']
+    old_vertices = loaded['old_vertices']
+    faces = loaded['faces']
+    edges = loaded['edges']
+    verts_by_edge = loaded['verts_by_edge']
+    moves= loaded['moves']
+    changes = new_vertices - old_vertices
+    init_mesh = pv.PolyData.from_regular_faces(old_vertices, faces)
+    final_mesh = pv.PolyData.from_regular_faces(new_vertices, faces)
+    for i in range(edges.shape[0]):
+        plotter = pv.Plotter()
+        #plotter.add_mesh(init_mesh, style="wireframe", line_width=2, color='orange')
+        plotter.add_mesh(final_mesh, color='red', opacity=0.75, line_width=4, show_edges=True, edge_color='black')
+        plotter.add_points(pv.PolyData(old_vertices[verts_by_edge[i]]), color='green', point_size=5)
+        plotter.add_points(pv.PolyData(old_vertices[edges[i]]), color='green', point_size=10)
+        plotter.add_arrows(old_vertices[verts_by_edge[i]], changes[verts_by_edge[i]], color="purple", mag=1)
+        plotter.add_arrows(old_vertices[edges[i]], changes[edges[i]], color="purple", mag=1)
+        plotter.add_arrows(old_vertices[verts_by_edge[i]], moves[verts_by_edge[i]], color="yellow", mag=1)
+        plotter.add_arrows(old_vertices[edges[i]], moves[edges[i]], color="yellow", mag=1)
+        plotter.view_isometric()
+        plotter.show()
+
+def debug_edge_moves():
+    mesh = pv.read(dir + "/debug_save/middle_trimesh_model.obj")
+    loaded = np.load(dir + "/debug_save/debug_edge_moves.npz", allow_pickle=True)
+    vertices = loaded['vertices']
+    vert_moves_unit = loaded['vert_moves_unit']
+    vert_moves = loaded['vert_moves']
+    edge_moves = loaded['edge_moves']
+    edges = loaded['edges']
+    for i in range(edges.shape[0]):
+        plotter = pv.Plotter()
+        plotter.add_mesh(mesh, style="wireframe", line_width=2, color='black')
+        plotter.add_points(pv.PolyData(vertices[edges[i]]), color='green', point_size=10)
+        #plotter.add_arrows(vertices[edges[i]], vert_moves_unit[edges[i]], color="blue")
+        plotter.add_arrows(vertices[edges[i]], vert_moves[edges[i]], color="green")
+        plotter.add_arrows(vertices[edges[i]], edge_moves[i], color="black")
+        plotter.view_isometric()
+        plotter.show()
 
 """
 def debug_change_calc():
@@ -267,5 +360,27 @@ def debug_change_calc():
         plotter.show()
 """
 
+def debug_broken_faces():
+    mesh = pv.read(dir + "/debug_save/final_trimesh_model.obj")
+    loaded = np.load(dir + "/debug_save/broken_faces.npz")
+    vertices = loaded['vertices']
+    faces = loaded['faces']
+    broken_faces = loaded['broken_faces']
+    edge_face_ownership = loaded['edge_face_ownership']
+    edges = loaded['edges']
+    neighborhood = loaded['neighborhood']
+    for i in range(len(broken_faces)):
+        broken = broken_faces[i]
+        f1 = neighborhood[:, 1][neighborhood[:, 0] == broken]
+        f2 = neighborhood[:, 0][neighborhood[:, 1] == broken]
+        main = pv.PolyData.from_regular_faces(faces=faces[broken][:, None], points=vertices)
+        neighbors = pv.PolyData.from_regular_faces(faces=faces[np.concatenate([f1, f2])], points=vertices)
+        plotter = pv.Plotter()
+        plotter.add_mesh(main, show_edges=True, color='red', opacity=0.7)
+        plotter.add_mesh(neighbors, show_edges=True, color='blue', opacity=0.3)
+        plotter.add_mesh(mesh, show_edges=False, color='yellow', opacity=0.3)
+        plotter.view_isometric()
+        plotter.show()
+
 if __name__ == "__main__":
-    debug_polygon_faces()
+    debug_broken_faces()

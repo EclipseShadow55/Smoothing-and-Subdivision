@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "subdivision_smoothing"
+version = "0.1.0"
+description = "A Python package for subdivision and smoothing of 3D meshes."
+dependencies = [
+    "numpy>=2.3.3",
+    "scipy>=1.16.2",
+    "trimesh>=4.7.1",
+    "numba>=0.61.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "coloraide>=5.1",
+    "networkx>=3.5",
+    "numpy>=2.3.3",
+    "pyvista>=0.46.1",
+]
