@@ -19,3 +19,17 @@ To use this library, you need to have Python installed.
     pip install subdivision-smoothing[dev]
     ```
 4. For development, clone the `subdivision_smoothing\debug` dir from the repository. You can use the `debug.py` script to visualize the intermediate steps of the algorithms.
+
+## Usage
+Here's a basic example of how to use the `SubdivisionSmoothing` class:
+```python
+from subdivision_smoothing import SubdivisionSmoothing
+import trimesh
+
+# Load a mesh
+mesh = trimesh.load_mesh('path_to_your_mesh.obj')
+# Use a sudivision method on the mesh
+subdivided_mesh = SubdivisionSmoothing.simple_subdivision(mesh, iterations=2)
+# Save or visualize the subdivided mesh
+subdivided_mesh.export('subdivided_mesh.obj')
+```
