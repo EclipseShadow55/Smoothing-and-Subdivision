@@ -29,7 +29,7 @@ import trimesh
 # Load a mesh
 mesh = trimesh.load_mesh('path_to_your_mesh.obj')
 # Use a sudivision method on the mesh
-subdivided_mesh = SubdivisionSmoothing.simple_subdivision(mesh, iterations=2)
+subdivided_mesh = SubdivisionSmoothing.simple_subdivide(mesh, iterations=2)
 # Save or visualize the subdivided mesh
 subdivided_mesh.export('subdivided_mesh.obj')
 ```
