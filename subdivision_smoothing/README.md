@@ -26,10 +26,7 @@ Here's a basic example of how to use the `SubdivisionSmoothing` class:
 from subdivision_smoothing import SubdivisionSmoothing
 import trimesh
 
-# Load a mesh
-mesh = trimesh.load_mesh('path_to_your_mesh.obj')
-# Use a sudivision method on the mesh
-subdivided_mesh = SubdivisionSmoothing.simple_subdivision(mesh, iterations=2)
-# Save or visualize the subdivided mesh
-subdivided_mesh.export('subdivided_mesh.obj')
+mesh = trimesh.load_mesh('path_to_your_mesh.obj') # Load a mesh
+subdivided_mesh = SubdivisionSmoothing.simple_subdivision(mesh, iterations=2) # Use a sudivision method on the mesh
+subdivided_mesh.export('subdivided_mesh.obj') # Save or visualize the subdivided mesh
 ```

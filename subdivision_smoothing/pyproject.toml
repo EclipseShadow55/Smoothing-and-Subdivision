@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "subdivision_smoothing"
-version = "0.1.0"
+version = "0.1.2"
 description = "A Python package for subdivision and smoothing of 3D meshes."
 dependencies = [
     "numpy>=2.3.3",
@@ -12,6 +12,9 @@ dependencies = [
     "trimesh>=4.7.1",
     "numba>=0.61.2",
 ]
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 
 [project.optional-dependencies]
 dev = [
@@ -20,3 +23,7 @@ dev = [
     "numpy>=2.3.3",
     "pyvista>=0.46.1",
 ]
+
+[project.urls]
+Documentation = "https://github.com/EclipseShadow55/Smoothing-and-Subdivision/blob/main/subdivision_smoothing/README.md"
+Repository = "https://github.com/EclipseShadow55/Smoothing-and-Subdivision"
