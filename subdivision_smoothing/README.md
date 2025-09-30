@@ -33,3 +33,8 @@ subdivided_mesh = SubdivisionSmoothing.simple_subdivide(mesh, iterations=2)
 # Save or visualize the subdivided mesh
 subdivided_mesh.export('subdivided_mesh.obj')
 ```
+
+## Issues
+The following are known issues with the most recent version of the package
+- `edge_erosion_subdivision` is only stable for 1 iteration for some meshes. The cause is how the meshing library handles degenerate faces, so I am working a solution that doesn't create any degenerate faces
+- `simple_smooth` raises an error when processing certain meshes. The cause is unknown.
