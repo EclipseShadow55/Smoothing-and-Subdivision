@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "subdivision_smoothing"
-version = "0.1.2"
+version = "0.1.3"
 description = "A Python package for subdivision and smoothing of 3D meshes."
 dependencies = [
     "numpy>=2.3.3",
